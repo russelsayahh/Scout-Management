@@ -42,7 +42,7 @@ function readScoutForm(formData: FormData): ScoutFormInput {
     emergencyContactPhone: field(formData, "emergencyContactPhone"),
     medicalNotes: field(formData, "medicalNotes"),
     joinDate: field(formData, "joinDate"),
-    patrol: field(formData, "patrol"),
+    patrolId: field(formData, "patrolId"),
     status: field(formData, "status"),
     // Absent means "unchanged"; empty string means "no picture".
     avatar: typeof avatar === "string" ? (avatar.length > 0 ? avatar : null) : null,

@@ -60,7 +60,6 @@ export const navSections: NavSection[] = [
         title: "Patrols",
         href: "/patrols",
         icon: Flag,
-        badge: 14,
         permission: "patrols.view",
       },
     ],

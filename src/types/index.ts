@@ -70,8 +70,8 @@ export interface Stat {
   polarity: DeltaPolarity;
   /** Extra context line under the value. */
   caption: string;
-  /** 12-point trend series, oldest first. */
-  trend: number[];
+  /** 12-point trend series, oldest first. Omitted where there is no real history to draw. */
+  trend?: number[];
   href: string;
   icon: LucideIcon;
 }
@@ -94,22 +94,6 @@ export interface ActivityEntry {
   target: string;
   /** Pre-formatted so server and client render identically. */
   timeAgo: string;
-}
-
-/* ----------------------------------- Events ------------------------------------ */
-
-export type EventKind = "meeting" | "activity" | "camp" | "training" | "deadline";
-
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  kind: EventKind;
-  /** ISO date, formatted at render with a fixed locale + UTC. */
-  date: string;
-  time: string;
-  location: string;
-  attendees: number;
-  capacity: number;
 }
 
 /* -------------------------------- Notifications -------------------------------- */

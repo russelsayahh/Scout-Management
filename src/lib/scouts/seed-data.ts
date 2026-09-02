@@ -1,4 +1,5 @@
-import type { Gender, Patrol, ScoutDetails, ScoutStatus } from "@/lib/scouts/types";
+import { patrolSlug } from "@/lib/patrols/types";
+import type { Gender, ScoutDetails, ScoutStatus } from "@/lib/scouts/types";
 
 /**
  * Sample register for a Scout troop, used to seed `.data/scouts.json` on first
@@ -7,7 +8,7 @@ import type { Gender, Patrol, ScoutDetails, ScoutStatus } from "@/lib/scouts/typ
  * Columns: first, last, date of birth, gender, patrol, status, guardian,
  * medical notes.
  */
-type Row = [string, string, string, Gender, Patrol, ScoutStatus, string, string];
+type Row = [string, string, string, Gender, string, ScoutStatus, string, string];
 
 const ROWS: Row[] = [
   ["Amara", "Osei", "2012-03-14", "female", "Kestrel", "active", "Grace Osei", "Mild asthma - inhaler in day bag."],
@@ -117,7 +118,8 @@ export function buildSeedScouts(): SeedScout[] {
       emergencyContactPhone: `+44 7700 ${String(900200 + index * 13).slice(0, 6)}`,
       medicalNotes,
       joinDate: joinDate(index),
-      patrol,
+      // Seeded patrols use a slug of their name as a stable id.
+      patrolId: patrol === "Unassigned" ? null : patrolSlug(patrol),
       status,
       archived: archiveReason !== "",
       archiveReason,

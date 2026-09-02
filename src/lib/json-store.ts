@@ -25,9 +25,19 @@ export interface JsonStore<T> {
   mutate<R>(operation: (items: T[]) => Promise<R> | R): Promise<R>;
 }
 
+export interface JsonStoreOptions<T> {
+  /**
+   * Brings a record written by an earlier version of the schema up to date.
+   * Applied on every read, so both `all` and `mutate` see the current shape and
+   * the file self-heals on the next write.
+   */
+  migrate?: (record: T) => T;
+}
+
 export function createJsonStore<T>(
   fileName: string,
   seed: () => Promise<T[]> | T[],
+  options: JsonStoreOptions<T> = {},
 ): JsonStore<T> {
   const file = path.join(DATA_DIR, fileName);
 
@@ -35,7 +45,10 @@ export function createJsonStore<T>(
     try {
       const raw = await fs.readFile(file, "utf8");
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as T[]) : [];
+      if (!Array.isArray(parsed)) return [];
+
+      const records = parsed as T[];
+      return options.migrate ? records.map(options.migrate) : records;
     } catch {
       // Missing or unreadable - treated as empty so seeding runs.
       return [];

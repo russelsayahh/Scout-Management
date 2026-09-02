@@ -63,3 +63,60 @@ export function formatLongDate(iso: string): string {
     timeZone: TIME_ZONE,
   }).format(new Date(iso));
 }
+
+/** "2026-09-15" -> "15 Sep 2026". */
+export function formatShortDate(iso: string): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: TIME_ZONE,
+  }).format(new Date(iso));
+}
+
+/**
+ * A span of days, collapsed to what actually differs.
+ *
+ * "18-20 September 2026" rather than "18 September 2026 - 20 September 2026",
+ * which is how a camp's dates are written on a permission form.
+ */
+export function formatDateRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+
+  const part = (date: Date, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(LOCALE, { ...options, timeZone: TIME_ZONE }).format(date);
+
+  if (startIso.slice(0, 10) === endIso.slice(0, 10)) return formatLongDate(startIso);
+
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+  const sameMonth = sameYear && start.getUTCMonth() === end.getUTCMonth();
+
+  if (sameMonth) {
+    return `${part(start, { day: "numeric" })}-${part(end, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}`;
+  }
+
+  if (sameYear) {
+    return `${part(start, { day: "numeric", month: "long" })} - ${part(end, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}`;
+  }
+
+  return `${formatLongDate(startIso)} - ${formatLongDate(endIso)}`;
+}
+
+/** "2026-09-15" -> "Tuesday 15 September". Used where the year is already clear. */
+export function formatDayLabel(iso: string): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: TIME_ZONE,
+  }).format(new Date(iso));
+}

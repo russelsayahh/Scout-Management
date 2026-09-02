@@ -26,24 +26,6 @@ export const genderLabels: Record<Gender, string> = {
   "prefer-not-to-say": "Prefer not to say",
 };
 
-/**
- * Patrols are a fixed list until the Patrols module lands, at which point this
- * becomes a lookup against real records.
- */
-export const PATROLS = [
-  "Unassigned",
-  "Kestrel",
-  "Falcon",
-  "Otter",
-  "Kingfisher",
-  "Badger",
-  "Heron",
-  "Peregrine",
-  "Osprey",
-] as const;
-
-export type Patrol = (typeof PATROLS)[number];
-
 export interface Scout {
   id: string;
 
@@ -68,7 +50,13 @@ export interface Scout {
 
   // Membership
   joinDate: string; // ISO day
-  patrol: Patrol;
+  /**
+   * The patrol this scout belongs to, or null when unassigned.
+   *
+   * A single field rather than a list: a scout is in at most one patrol, and
+   * making that structural means no rule has to police it.
+   */
+  patrolId: string | null;
   status: ScoutStatus;
 
   // Archive state
@@ -105,4 +93,19 @@ export function ageOn(dateOfBirth: string, on: Date): number | null {
   if (monthDelta < 0 || (monthDelta === 0 && on.getUTCDate() < born.getUTCDate())) age -= 1;
 
   return age < 0 ? null : age;
+}
+
+/**
+ * Ages for a set of scouts, keyed by id.
+ *
+ * Built on the server and passed to client components as data, so a client
+ * re-render can never disagree with the server about somebody's age.
+ */
+export function buildAgeMap(
+  scouts: Pick<Scout, "id" | "dateOfBirth">[],
+  on: Date,
+): Record<string, number | null> {
+  const ages: Record<string, number | null> = {};
+  for (const scout of scouts) ages[scout.id] = ageOn(scout.dateOfBirth, on);
+  return ages;
 }

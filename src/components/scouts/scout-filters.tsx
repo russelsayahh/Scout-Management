@@ -12,7 +12,7 @@ import {
   isFiltered,
   type ScoutQuery,
 } from "@/lib/scouts/query";
-import { PATROLS, SCOUT_STATUSES, scoutStatusLabels } from "@/lib/scouts/types";
+import { SCOUT_STATUSES, scoutStatusLabels } from "@/lib/scouts/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,7 +22,16 @@ import { cn } from "@/lib/utils";
  * renders the filtered list, the back button works, and a filtered view can be
  * copied to someone else as a link.
  */
-export function ScoutFilters({ query, total }: { query: ScoutQuery; total: number }) {
+export function ScoutFilters({
+  query,
+  total,
+  patrols,
+}: {
+  query: ScoutQuery;
+  total: number;
+  /** Assignable patrols, resolved on the server. */
+  patrols: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -126,9 +135,10 @@ export function ScoutFilters({ query, total }: { query: ScoutQuery; total: numbe
             className="sm:w-40"
           >
             <option value="all">All patrols</option>
-            {PATROLS.map((patrol) => (
-              <option key={patrol} value={patrol}>
-                {patrol}
+            <option value="none">No patrol</option>
+            {patrols.map((patrol) => (
+              <option key={patrol.id} value={patrol.id}>
+                {patrol.name}
               </option>
             ))}
           </Select>
@@ -160,7 +170,11 @@ export function ScoutFilters({ query, total }: { query: ScoutQuery; total: numbe
           )}
           <span className={cn(pending && "opacity-60")}>
             {total} {total === 1 ? "scout" : "scouts"}
-            {filtered ? " match these filters" : " on the register"}
+            {filtered
+              ? total === 1
+                ? " matches these filters"
+                : " match these filters"
+              : " on the register"}
           </span>
         </span>
 

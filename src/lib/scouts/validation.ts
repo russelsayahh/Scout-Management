@@ -1,9 +1,4 @@
-import {
-  GENDERS,
-  PATROLS,
-  SCOUT_STATUSES,
-  type ScoutDetails,
-} from "@/lib/scouts/types";
+import { GENDERS, SCOUT_STATUSES, type ScoutDetails } from "@/lib/scouts/types";
 import {
   parseDateOnly,
   validateAvatar,
@@ -91,7 +86,8 @@ export interface ScoutFormInput {
   emergencyContactPhone: string;
   medicalNotes: string;
   joinDate: string;
-  patrol: string;
+  /** Patrol id, or an empty string for unassigned. */
+  patrolId: string;
   status: string;
   avatar: string | null;
 }
@@ -117,7 +113,6 @@ export function validateScoutInput(input: ScoutFormInput): FieldErrors {
   );
   set("medicalNotes", validateMedicalNotes(input.medicalNotes));
   set("joinDate", validateJoinDate(input.joinDate, input.dateOfBirth));
-  set("patrol", validateChoice(input.patrol, PATROLS, "patrol"));
   set("status", validateChoice(input.status, SCOUT_STATUSES, "status"));
   set("avatar", validateAvatar(input.avatar));
 
@@ -141,7 +136,7 @@ export function toScoutDetails(input: ScoutFormInput): ScoutDetails {
     emergencyContactPhone: input.emergencyContactPhone.trim(),
     medicalNotes: input.medicalNotes.trim(),
     joinDate: input.joinDate,
-    patrol: input.patrol as ScoutDetails["patrol"],
+    patrolId: input.patrolId ? input.patrolId : null,
     status: input.status as ScoutDetails["status"],
     avatar: input.avatar,
   };

@@ -6,6 +6,7 @@ import { AccessDenied } from "@/components/shared/access-denied";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { patrolOptions } from "@/lib/patrols/service";
 import { getScout } from "@/lib/scouts/service";
 import { scoutFullName } from "@/lib/scouts/types";
 
@@ -30,6 +31,8 @@ export default async function EditScoutPage({ params }: PageProps) {
   const scout = await getScout(id);
   if (!scout) notFound();
 
+  const patrols = await patrolOptions();
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
@@ -38,7 +41,7 @@ export default async function EditScoutPage({ params }: PageProps) {
         description="Changes are saved to the register immediately."
       />
 
-      <ScoutForm mode="edit" scout={scout} />
+      <ScoutForm mode="edit" scout={scout} patrols={patrols} />
     </div>
   );
 }

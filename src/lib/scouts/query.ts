@@ -1,11 +1,4 @@
-import {
-  PATROLS,
-  SCOUT_STATUSES,
-  scoutFullName,
-  type Patrol,
-  type Scout,
-  type ScoutStatus,
-} from "@/lib/scouts/types";
+import { SCOUT_STATUSES, scoutFullName, type Scout, type ScoutStatus } from "@/lib/scouts/types";
 
 /**
  * Search, filter, sort and pagination for the scout list.
@@ -13,12 +6,18 @@ import {
  * All of it is pure and lives in the URL, so a filtered view is shareable, the
  * back button works, and the server can render the exact same result the link
  * describes. No server-only imports here - the filter bar uses it too.
+ *
+ * Patrol names are passed in rather than looked up, which keeps these functions
+ * pure now that patrols are records rather than a fixed list.
  */
 
 export type ScoutSort = "name" | "patrol" | "status" | "age" | "joined";
 export type SortDirection = "asc" | "desc";
 /** Archived records are hidden by default rather than deleted. */
 export type ArchivedFilter = "current" | "archived" | "all";
+
+/** A patrol id, `all` for no filter, or `none` for scouts in no patrol. */
+export type PatrolFilter = string;
 
 export const SCOUT_SORTS: readonly ScoutSort[] = ["name", "patrol", "status", "age", "joined"];
 
@@ -39,7 +38,7 @@ export const archivedFilterLabels: Record<ArchivedFilter, string> = {
 export interface ScoutQuery {
   q: string;
   status: ScoutStatus | "all";
-  patrol: Patrol | "all";
+  patrol: PatrolFilter;
   archived: ArchivedFilter;
   sort: ScoutSort;
   dir: SortDirection;
@@ -80,7 +79,8 @@ export function parseScoutQuery(params: RawParams): ScoutQuery {
     status: SCOUT_STATUSES.includes(status as ScoutStatus)
       ? (status as ScoutStatus)
       : "all",
-    patrol: PATROLS.includes(patrol as Patrol) ? (patrol as Patrol) : "all",
+    // An unknown patrol id simply matches nothing, so it needs no allow-list.
+    patrol: patrol ? patrol.slice(0, 100) : "all",
     archived:
       archived === "archived" || archived === "all" ? archived : DEFAULT_SCOUT_QUERY.archived,
     sort: SCOUT_SORTS.includes(sort as ScoutSort) ? (sort as ScoutSort) : DEFAULT_SCOUT_QUERY.sort,
@@ -122,7 +122,15 @@ export function isFiltered(query: ScoutQuery): boolean {
 
 /* --------------------------------- matching -------------------------------- */
 
-function matchesSearch(scout: Scout, needle: string): boolean {
+/** Patrol id to display name. Scouts with no patrol resolve to "Unassigned". */
+export type PatrolNames = ReadonlyMap<string, string>;
+
+export function patrolNameOf(scout: Scout, names: PatrolNames): string {
+  if (!scout.patrolId) return "Unassigned";
+  return names.get(scout.patrolId) ?? "Unknown patrol";
+}
+
+function matchesSearch(scout: Scout, needle: string, names: PatrolNames): boolean {
   if (!needle) return true;
 
   const haystack = [
@@ -131,7 +139,7 @@ function matchesSearch(scout: Scout, needle: string): boolean {
     scoutFullName(scout),
     scout.email,
     scout.phone,
-    scout.patrol,
+    patrolNameOf(scout, names),
     scout.emergencyContactName,
   ]
     .join(" ")
@@ -142,14 +150,17 @@ function matchesSearch(scout: Scout, needle: string): boolean {
 
 const collator = new Intl.Collator("en-GB", { sensitivity: "base", numeric: true });
 
-function compare(a: Scout, b: Scout, sort: ScoutSort): number {
+function compare(a: Scout, b: Scout, sort: ScoutSort, names: PatrolNames): number {
   switch (sort) {
     case "name":
       return (
         collator.compare(a.firstName, b.firstName) || collator.compare(a.lastName, b.lastName)
       );
     case "patrol":
-      return collator.compare(a.patrol, b.patrol) || collator.compare(a.firstName, b.firstName);
+      return (
+        collator.compare(patrolNameOf(a, names), patrolNameOf(b, names)) ||
+        collator.compare(a.firstName, b.firstName)
+      );
     case "status":
       return collator.compare(a.status, b.status) || collator.compare(a.firstName, b.firstName);
     case "age":
@@ -170,19 +181,28 @@ export interface ScoutPage {
 }
 
 /** Applies the whole query - filter, then sort, then page. */
-export function applyScoutQuery(scouts: Scout[], query: ScoutQuery): ScoutPage {
+export function applyScoutQuery(
+  scouts: Scout[],
+  query: ScoutQuery,
+  patrolNames: PatrolNames = new Map(),
+): ScoutPage {
   const needle = query.q.trim().toLowerCase();
 
   const filtered = scouts.filter((scout) => {
     if (query.archived === "current" && scout.archived) return false;
     if (query.archived === "archived" && !scout.archived) return false;
     if (query.status !== "all" && scout.status !== query.status) return false;
-    if (query.patrol !== "all" && scout.patrol !== query.patrol) return false;
-    return matchesSearch(scout, needle);
+
+    if (query.patrol === "none" && scout.patrolId !== null) return false;
+    if (query.patrol !== "all" && query.patrol !== "none" && scout.patrolId !== query.patrol) {
+      return false;
+    }
+
+    return matchesSearch(scout, needle, patrolNames);
   });
 
   const direction = query.dir === "desc" ? -1 : 1;
-  const sorted = [...filtered].sort((a, b) => compare(a, b, query.sort) * direction);
+  const sorted = [...filtered].sort((a, b) => compare(a, b, query.sort, patrolNames) * direction);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(Math.max(1, query.page), pageCount);

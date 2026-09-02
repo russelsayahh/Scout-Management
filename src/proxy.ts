@@ -29,10 +29,13 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
 
-  // Signed in, but heading for the login or register page.
-  if (session && isPublic(pathname)) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
+  /*
+   * Sending a signed-in visitor away from /login is deliberately NOT done here.
+   * A signed cookie only proves the token was issued by us, not that the account
+   * still exists: if the user record has gone, this would bounce them to a page
+   * whose layout bounces them straight back, and the two would loop forever.
+   * `requireGuest()` makes that call instead, having actually loaded the user.
+   */
 
   if (!session && !isPublic(pathname)) {
     const loginUrl = new URL("/login", request.url);

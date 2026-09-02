@@ -1,9 +1,12 @@
-import { applyScoutQuery, type ScoutPage, type ScoutQuery } from "@/lib/scouts/query";
+import {
+  applyScoutQuery,
+  type PatrolNames,
+  type ScoutPage,
+  type ScoutQuery,
+} from "@/lib/scouts/query";
 import * as store from "@/lib/scouts/store";
 import {
-  PATROLS,
   SCOUT_STATUSES,
-  type Patrol,
   type Scout,
   type ScoutDetails,
   type ScoutStatus,
@@ -27,8 +30,11 @@ function failure(message: string, fieldErrors?: FieldErrors): ServiceResult<neve
 
 /* --------------------------------- queries -------------------------------- */
 
-export async function listScouts(query: ScoutQuery): Promise<ScoutPage> {
-  return applyScoutQuery(await store.allScouts(), query);
+export async function listScouts(
+  query: ScoutQuery,
+  patrolNames: PatrolNames = new Map(),
+): Promise<ScoutPage> {
+  return applyScoutQuery(await store.allScouts(), query, patrolNames);
 }
 
 export async function getScout(id: string): Promise<Scout | null> {
@@ -40,7 +46,8 @@ export interface ScoutCounts {
   current: number;
   archived: number;
   byStatus: Record<ScoutStatus, number>;
-  byPatrol: Record<Patrol, number>;
+  /** Keyed by patrol id; scouts with no patrol are not counted here. */
+  byPatrol: Record<string, number>;
 }
 
 /** Roll-up used by the list header and the sidebar badge. */
@@ -50,10 +57,7 @@ export async function scoutCounts(): Promise<ScoutCounts> {
   const byStatus = Object.fromEntries(
     SCOUT_STATUSES.map((status) => [status, 0]),
   ) as Record<ScoutStatus, number>;
-  const byPatrol = Object.fromEntries(PATROLS.map((patrol) => [patrol, 0])) as Record<
-    Patrol,
-    number
-  >;
+  const byPatrol: Record<string, number> = {};
 
   let archived = 0;
   for (const scout of scouts) {
@@ -62,7 +66,7 @@ export async function scoutCounts(): Promise<ScoutCounts> {
       continue;
     }
     byStatus[scout.status] += 1;
-    byPatrol[scout.patrol] += 1;
+    if (scout.patrolId) byPatrol[scout.patrolId] = (byPatrol[scout.patrolId] ?? 0) + 1;
   }
 
   return {

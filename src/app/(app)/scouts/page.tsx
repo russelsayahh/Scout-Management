@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { patrolNameMap, patrolOptions } from "@/lib/patrols/service";
 import { parseScoutQuery, scoutsHref } from "@/lib/scouts/query";
 import { listScouts, scoutCounts } from "@/lib/scouts/service";
 
@@ -34,7 +35,8 @@ export default async function ScoutsPage({
   const canManage = can(user.role, "scouts.manage");
 
   const query = parseScoutQuery(await searchParams);
-  const [page, counts] = await Promise.all([listScouts(query), scoutCounts()]);
+  const [patrolNames, patrols] = await Promise.all([patrolNameMap(), patrolOptions()]);
+  const [page, counts] = await Promise.all([listScouts(query, patrolNames), scoutCounts()]);
 
   // Computed once here so every row agrees on today's date.
   const today = new Date();
@@ -63,7 +65,7 @@ export default async function ScoutsPage({
         }
       />
 
-      <ScoutFilters query={query} total={page.total} />
+      <ScoutFilters query={query} total={page.total} patrols={patrols} />
 
       <Card className="overflow-hidden">
         {page.items.length === 0 ? (
@@ -91,6 +93,7 @@ export default async function ScoutsPage({
             query={query}
             canManage={canManage}
             today={today}
+            patrolNames={patrolNames}
           />
         )}
       </Card>

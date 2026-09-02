@@ -18,7 +18,6 @@ import { initialFormState } from "@/lib/form-state";
 import { createScoutAction, updateScoutAction } from "@/lib/scouts/actions";
 import {
   GENDERS,
-  PATROLS,
   SCOUT_STATUSES,
   genderLabels,
   scoutFullName,
@@ -49,7 +48,12 @@ import {
  * carries a hidden id and posts to `updateScoutAction`. Both actions re-run the
  * same validators the fields use on blur, so the rules live in one place.
  */
-export function ScoutForm({ mode, scout }: { mode: "create"; scout?: undefined } | { mode: "edit"; scout: Scout }) {
+type ScoutFormProps = ({ mode: "create"; scout?: undefined } | { mode: "edit"; scout: Scout }) & {
+  /** Patrols a scout may be placed in, resolved on the server. */
+  patrols: { id: string; name: string }[];
+};
+
+export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
   const action = mode === "create" ? createScoutAction : updateScoutAction;
   const [state, formAction, pending] = useActionState(action, initialFormState);
   const { errors, setFieldError, clearField } = useFieldErrors(state);
@@ -312,15 +316,17 @@ export function ScoutForm({ mode, scout }: { mode: "create"; scout?: undefined }
 
             <SelectField
               label="Patrol"
-              name="patrol"
-              defaultValue={initial("patrol", scout?.patrol ?? "Unassigned")}
-              onChange={() => clearField("patrol")}
-              error={errors.patrol}
+              name="patrolId"
+              defaultValue={initial("patrolId", scout?.patrolId ?? "")}
+              onChange={() => clearField("patrolId")}
+              error={errors.patrolId}
+              hint="A scout belongs to one patrol at a time."
               disabled={pending}
             >
-              {PATROLS.map((patrol) => (
-                <option key={patrol} value={patrol}>
-                  {patrol}
+              <option value="">Unassigned</option>
+              {patrols.map((patrol) => (
+                <option key={patrol.id} value={patrol.id}>
+                  {patrol.name}
                 </option>
               ))}
             </SelectField>

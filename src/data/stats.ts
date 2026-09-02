@@ -80,12 +80,3 @@ export const dashboardStats: Stat[] = [
     icon: ClipboardCheck,
   },
 ];
-
-/** Drives the attendance meter under the stat row. */
-export const attendanceSummary = {
-  rate: 87.4,
-  target: 85,
-  registersTaken: 24,
-  registersExpected: 26,
-  flaggedScouts: 7,
-};

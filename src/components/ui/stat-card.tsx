@@ -9,7 +9,7 @@ import type { Stat } from "@/types";
 
 /**
  * Stat tile: label, value, optional signed delta against a named period, a
- * caption, and a 12-point trend line.
+ * caption, and a 12-point trend line where there is real history behind it.
  *
  * The delta's direction is carried by an arrow icon and a signed number as well
  * as by color, so it never depends on hue alone.
@@ -71,9 +71,11 @@ export function StatCard({ stat, className }: { stat: Stat; className?: string }
           {stat.deltaPeriod && <span className="xl:hidden"> · {stat.deltaPeriod}</span>}
         </p>
 
-        <div className="mt-auto pt-5">
-          <Sparkline data={stat.trend} height={36} />
-        </div>
+        {stat.trend && (
+          <div className="mt-auto pt-5">
+            <Sparkline data={stat.trend} height={36} />
+          </div>
+        )}
       </Link>
     </Card>
   );

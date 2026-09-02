@@ -1,13 +1,8 @@
 import {
-  Backpack,
   BarChart3,
-  CalendarDays,
-  ClipboardCheck,
-  Flag,
   FolderOpen,
   Settings,
   ShieldCheck,
-  Tent,
 } from "lucide-react";
 
 import type { ModuleConfig } from "@/types";
@@ -38,116 +33,6 @@ export const modules = {
       { title: "Training records", description: "Module completion, wood badge progress and validation dates." },
       { title: "Safeguarding checks", description: "Track disclosure status and renewal deadlines." },
       { title: "Role assignment", description: "Assign leaders to sections, patrols and individual events." },
-    ],
-  },
-  patrols: {
-    key: "patrols",
-    name: "Patrols",
-    href: "/patrols",
-    icon: Flag,
-    permission: "patrols.view",
-    managePermission: "patrols.manage",
-    description: "Patrol structure, leadership and membership.",
-    summary:
-      "Patrols will be managed as first-class groups - membership, patrol leader and assistant, points and standing across the term.",
-    metrics: [
-      { label: "Patrols", value: "14" },
-      { label: "Average size", value: "8" },
-      { label: "Patrol leaders", value: "14" },
-    ],
-    plannedFeatures: [
-      { title: "Patrol builder", description: "Create patrols and move members between them." },
-      { title: "Leadership roles", description: "Assign patrol leaders and assistant patrol leaders." },
-      { title: "Patrol points", description: "Running totals for inter-patrol competitions." },
-      { title: "Patrol view", description: "Attendance and progress rolled up per patrol." },
-    ],
-  },
-  activities: {
-    key: "activities",
-    name: "Activities",
-    href: "/activities",
-    icon: CalendarDays,
-    permission: "activities.view",
-    managePermission: "activities.manage",
-    description: "Weekly programme, sessions and activity planning.",
-    summary:
-      "The programme planner will hold weekly meetings and one-off activities, each with a plan, required kit, risk assessment and assigned leaders.",
-    metrics: [
-      { label: "Scheduled", value: "12" },
-      { label: "This month", value: "5" },
-      { label: "Needs a plan", value: "2" },
-    ],
-    plannedFeatures: [
-      { title: "Programme calendar", description: "Term view of meetings, activities and events." },
-      { title: "Session plans", description: "Objectives, timings, kit lists and leader assignments." },
-      { title: "Risk assessments", description: "Attach and approve assessments before an activity runs." },
-      { title: "Badge links", description: "Map activities to the badge requirements they satisfy." },
-    ],
-  },
-  camps: {
-    key: "camps",
-    name: "Camps",
-    href: "/camps",
-    icon: Tent,
-    permission: "camps.view",
-    managePermission: "camps.manage",
-    description: "Residential events, bookings, permissions and logistics.",
-    summary:
-      "Camp management will cover the whole cycle - site booking, costing, permission collection, kit lists, catering numbers and a final nominal roll.",
-    metrics: [
-      { label: "Upcoming camps", value: "4" },
-      { label: "Places booked", value: "126" },
-      { label: "Awaiting consent", value: "18" },
-    ],
-    plannedFeatures: [
-      { title: "Camp setup", description: "Dates, site, cost per head and capacity in one record." },
-      { title: "Bookings", description: "Track who is attending, deposits and outstanding payments." },
-      { title: "Permission forms", description: "Issue, chase and record consent from guardians." },
-      { title: "Nominal roll", description: "Generate the roll, dietary needs and medical summary." },
-    ],
-  },
-  attendance: {
-    key: "attendance",
-    name: "Attendance",
-    href: "/attendance",
-    icon: ClipboardCheck,
-    permission: "attendance.view",
-    managePermission: "attendance.record",
-    description: "Register taking, trends and follow-up.",
-    summary:
-      "Attendance will be taken per session in a few taps, then rolled up into per-scout, per-patrol and per-term trends that highlight who is drifting away.",
-    metrics: [
-      { label: "Attendance rate", value: "87.4%" },
-      { label: "Registers this term", value: "24" },
-      { label: "Flagged scouts", value: "7" },
-    ],
-    plannedFeatures: [
-      { title: "Quick register", description: "Take a register on a phone at the start of a meeting." },
-      { title: "Trends", description: "Attendance over time by scout, patrol and section." },
-      { title: "Absence follow-up", description: "Flag repeated absence and log the contact made." },
-      { title: "Term reports", description: "Export attendance summaries for the group executive." },
-    ],
-  },
-  equipment: {
-    key: "equipment",
-    name: "Equipment",
-    href: "/equipment",
-    icon: Backpack,
-    permission: "equipment.view",
-    managePermission: "equipment.manage",
-    description: "Group kit, condition, loans and stocktakes.",
-    summary:
-      "The quartermaster store will track every item - tents, stoves, ropes and camp kit - with condition, location, loan history and service dates.",
-    metrics: [
-      { label: "Items tracked", value: "412" },
-      { label: "On loan", value: "37" },
-      { label: "Needs repair", value: "9" },
-    ],
-    plannedFeatures: [
-      { title: "Inventory", description: "Catalogue kit by category, location and condition." },
-      { title: "Loans", description: "Check equipment out to a camp, patrol or leader and back in." },
-      { title: "Maintenance", description: "Log damage, repairs and inspection dates." },
-      { title: "Stocktake", description: "Guided count with a reconciliation report." },
     ],
   },
   documents: {

@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { ArrowLeft, HeartPulse, MapPin, Phone, ShieldAlert } from "lucide-react";
 
+import {
+  ScoutAttendanceCard,
+  ScoutAttendanceHistory,
+} from "@/components/attendance/scout-attendance";
+import { ScoutCamps } from "@/components/camps/scout-camps";
 import { ScoutActions } from "@/components/scouts/scout-actions";
 import { ScoutStatusBadge } from "@/components/scouts/scout-status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Callout } from "@/components/ui/callout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DetailList, EmptyValue } from "@/components/ui/detail-list";
+import type { ScoutAttendance } from "@/lib/attendance/service";
+import type { CampSummary } from "@/lib/camps/service";
 import { formatLongDate } from "@/lib/format";
 import {
   ageOn,
@@ -22,10 +29,19 @@ export function ScoutProfile({
   scout,
   canManage,
   today,
+  patrol,
+  attendance,
+  camps,
 }: {
   scout: Scout;
   canManage: boolean;
   today: Date;
+  /** The scout's patrol, or null when unassigned. */
+  patrol: { id: string; name: string } | null;
+  /** Their register history and the totals drawn from it. */
+  attendance: ScoutAttendance;
+  /** Camps they are registered for, upcoming first. */
+  camps: CampSummary[];
 }) {
   const age = ageOn(scout.dateOfBirth, today);
   const name = scoutFullName(scout);
@@ -57,7 +73,16 @@ export function ScoutProfile({
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
               <ScoutStatusBadge status={scout.status} archived={scout.archived} />
-              <span className="text-[13px] text-ink-secondary">{scout.patrol} Patrol</span>
+              {patrol ? (
+                <Link
+                  href={`/patrols/${patrol.id}`}
+                  className="text-[13px] text-ink-secondary hover:text-brand-text hover:underline"
+                >
+                  {patrol.name} Patrol
+                </Link>
+              ) : (
+                <span className="text-[13px] text-ink-muted">No patrol</span>
+              )}
               {age !== null && (
                 <span className="text-[13px] text-ink-secondary">
                   {age} years old
@@ -202,6 +227,11 @@ export function ScoutProfile({
           </CardContent>
         </Card>
 
+        {/* Attendance */}
+        <div className="lg:col-span-2">
+          <ScoutAttendanceCard attendance={attendance} firstName={scout.firstName} />
+        </div>
+
         {/* Membership */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -210,7 +240,19 @@ export function ScoutProfile({
           <CardContent>
             <DetailList
               items={[
-                { label: "Patrol", value: scout.patrol },
+                {
+                  label: "Patrol",
+                  value: patrol ? (
+                    <Link
+                      href={`/patrols/${patrol.id}`}
+                      className="hover:text-brand-text hover:underline"
+                    >
+                      {patrol.name}
+                    </Link>
+                  ) : (
+                    <EmptyValue>Unassigned</EmptyValue>
+                  ),
+                },
                 {
                   label: "Status",
                   value: (
@@ -228,6 +270,11 @@ export function ScoutProfile({
             />
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ScoutAttendanceHistory attendance={attendance} />
+        <ScoutCamps camps={camps} firstName={scout.firstName} />
       </div>
     </div>
   );

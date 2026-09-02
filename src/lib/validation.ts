@@ -129,6 +129,53 @@ export function validateDate(value: string, rules: DateRules): string | undefine
   return undefined;
 }
 
+/* ---------------------------------- times --------------------------------- */
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** "19:30" -> 1170. Null when the value is not a 24-hour clock time. */
+export function parseTimeOfDay(value: string): number | null {
+  const match = TIME_PATTERN.exec(value.trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+export function validateTime(value: string, label: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return `Enter ${label}.`;
+  if (parseTimeOfDay(trimmed) === null) return `Enter ${label} as a 24-hour time, e.g. 19:00.`;
+  return undefined;
+}
+
+/* -------------------------------- numbers --------------------------------- */
+
+export interface NumberRules {
+  label: string;
+  required?: boolean;
+  min?: number;
+  max?: number;
+}
+
+/** Whole numbers only, so a capacity cannot be "12.5 people". */
+export function validateInteger(value: string, rules: NumberRules): string | undefined {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return rules.required ? `Enter ${rules.label}.` : undefined;
+  }
+
+  if (!/^\d+$/.test(trimmed)) return `${capitalise(rules.label)} must be a whole number.`;
+
+  const parsed = Number(trimmed);
+  if (rules.min !== undefined && parsed < rules.min) {
+    return `${capitalise(rules.label)} must be at least ${rules.min}.`;
+  }
+  if (rules.max !== undefined && parsed > rules.max) {
+    return `${capitalise(rules.label)} must be ${rules.max} or fewer.`;
+  }
+  return undefined;
+}
+
 /* --------------------------------- choices -------------------------------- */
 
 export function validateChoice<T extends string>(

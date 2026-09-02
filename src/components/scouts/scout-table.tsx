@@ -4,7 +4,13 @@ import { ScoutActions } from "@/components/scouts/scout-actions";
 import { ScoutStatusBadge } from "@/components/scouts/scout-status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { SortHeader, TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { scoutsHref, type ScoutQuery, type ScoutSort } from "@/lib/scouts/query";
+import {
+  patrolNameOf,
+  scoutsHref,
+  type PatrolNames,
+  type ScoutQuery,
+  type ScoutSort,
+} from "@/lib/scouts/query";
 import { ageOn, scoutFullName, type Scout } from "@/lib/scouts/types";
 import { formatLongDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -46,12 +52,15 @@ export function ScoutTable({
   query,
   canManage,
   today,
+  patrolNames,
 }: {
   scouts: Scout[];
   query: ScoutQuery;
   canManage: boolean;
   /** Reference date for age, passed in so the calculation stays pure. */
   today: Date;
+  /** Patrol id to name, resolved on the server. */
+  patrolNames: PatrolNames;
 }) {
   /** Clicking the active column flips direction; a new column starts ascending. */
   const sortHref = (sort: ScoutSort) =>
@@ -99,7 +108,18 @@ export function ScoutTable({
                   <TD className="max-w-[18rem]">
                     <ScoutIdentity scout={scout} />
                   </TD>
-                  <TD className="whitespace-nowrap text-ink-secondary">{scout.patrol}</TD>
+                  <TD className="whitespace-nowrap">
+                    {scout.patrolId ? (
+                      <Link
+                        href={`/patrols/${scout.patrolId}`}
+                        className="text-ink-secondary hover:text-brand-text hover:underline"
+                      >
+                        {patrolNameOf(scout, patrolNames)}
+                      </Link>
+                    ) : (
+                      <span className="text-ink-muted">Unassigned</span>
+                    )}
+                  </TD>
                   <TD>
                     <ScoutStatusBadge status={scout.status} archived={scout.archived} />
                   </TD>
@@ -137,7 +157,9 @@ export function ScoutTable({
               <dl className="mt-3 grid grid-cols-3 gap-2 text-[11.5px]">
                 <div>
                   <dt className="text-ink-muted">Patrol</dt>
-                  <dd className="mt-0.5 truncate text-ink-secondary">{scout.patrol}</dd>
+                  <dd className="mt-0.5 truncate text-ink-secondary">
+                    {patrolNameOf(scout, patrolNames)}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Age</dt>
