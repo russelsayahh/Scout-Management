@@ -31,6 +31,10 @@ export interface StoredUser {
   role: Role;
   /** Data URL, or null when the user has no picture. */
   avatar: string | null;
+  /** Free-text title, e.g. "Group Scout Leader" or "Quartermaster". Not the same as `role`, which drives permissions. */
+  position: string;
+  /** Patrol ids this leader has been given responsibility for. */
+  assignedPatrolIds: string[];
   passwordHash: string;
   createdAt: string;
 }
@@ -43,5 +47,7 @@ export interface SessionUser {
   phone: string;
   role: Role;
   avatar: string | null;
+  position: string;
+  assignedPatrolIds: string[];
   createdAt: string;
 }

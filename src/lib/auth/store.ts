@@ -15,24 +15,40 @@ import { createJsonStore } from "@/lib/json-store";
  * Node-only.
  */
 
-const store = createJsonStore<StoredUser>("users.json", async () => {
-  const users: StoredUser[] = [];
+/** Records written before leader profiles existed carried neither field. */
+function migrateUser(record: StoredUser): StoredUser {
+  if (record.position !== undefined && record.assignedPatrolIds !== undefined) return record;
+  return {
+    ...record,
+    position: record.position ?? "",
+    assignedPatrolIds: record.assignedPatrolIds ?? [],
+  };
+}
 
-  for (const account of demoAccounts) {
-    users.push({
-      id: randomUUID(),
-      name: account.name,
-      email: normaliseEmail(account.email),
-      phone: account.phone,
-      role: account.role,
-      avatar: null,
-      passwordHash: await hashPassword(DEMO_PASSWORD),
-      createdAt: new Date().toISOString(),
-    });
-  }
+const store = createJsonStore<StoredUser>(
+  "users.json",
+  async () => {
+    const users: StoredUser[] = [];
 
-  return users;
-});
+    for (const account of demoAccounts) {
+      users.push({
+        id: randomUUID(),
+        name: account.name,
+        email: normaliseEmail(account.email),
+        phone: account.phone,
+        role: account.role,
+        avatar: null,
+        position: "",
+        assignedPatrolIds: [],
+        passwordHash: await hashPassword(DEMO_PASSWORD),
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    return users;
+  },
+  { migrate: migrateUser },
+);
 
 /** Strips the password hash. Everything leaving this module goes through it. */
 export function toSessionUser(user: StoredUser): SessionUser {
@@ -43,6 +59,8 @@ export function toSessionUser(user: StoredUser): SessionUser {
     phone: user.phone,
     role: user.role,
     avatar: user.avatar,
+    position: user.position,
+    assignedPatrolIds: user.assignedPatrolIds,
     createdAt: user.createdAt,
   };
 }
@@ -104,6 +122,8 @@ export async function createUser(input: CreateUserInput): Promise<StoredUser | n
       phone: input.phone.trim(),
       role: input.role,
       avatar: null,
+      position: "",
+      assignedPatrolIds: [],
       passwordHash: input.passwordHash,
       createdAt: new Date().toISOString(),
     };
@@ -132,5 +152,28 @@ export async function updateUser(
 
     users[index] = next;
     return next;
+  });
+}
+
+/**
+ * Drops one patrol from every leader's assignment, used when a patrol is
+ * archived so no profile keeps pointing at it. Returns how many changed.
+ */
+export async function removePatrolFromAllLeaders(patrolId: string): Promise<number> {
+  return store.mutate((users) => {
+    let changed = 0;
+
+    for (let index = 0; index < users.length; index += 1) {
+      const user = users[index];
+      if (!user.assignedPatrolIds.includes(patrolId)) continue;
+
+      users[index] = {
+        ...user,
+        assignedPatrolIds: user.assignedPatrolIds.filter((id) => id !== patrolId),
+      };
+      changed += 1;
+    }
+
+    return changed;
   });
 }

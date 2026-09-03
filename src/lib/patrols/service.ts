@@ -1,3 +1,4 @@
+import * as userStore from "@/lib/auth/store";
 import * as patrolStore from "@/lib/patrols/store";
 import type { Patrol, PatrolDetails } from "@/lib/patrols/types";
 import * as scoutStore from "@/lib/scouts/store";
@@ -160,6 +161,7 @@ export async function archivePatrol(
   if (patrol.archived) return failure("That patrol is already archived.");
 
   const released = await scoutStore.clearPatrolMembership(id);
+  await userStore.removePatrolFromAllLeaders(id);
 
   const updated = await patrolStore.updatePatrol(id, {
     archived: true,

@@ -214,6 +214,8 @@ export async function changeRoleAction(
   if (!result.ok) return { status: "error", message: result.message };
 
   revalidatePath("/users");
+  revalidatePath("/leaders");
+  revalidatePath(`/leaders/${userId}`);
 
   // Phrased without an article so no role label needs "a" vs "an".
   return {

@@ -314,6 +314,13 @@ export async function recentActivitiesForPatrol(
   return sortActivities(relevant, "date", "desc").slice(0, limit);
 }
 
+/** A leader's own programme, for their detail page: newest first. */
+export async function activitiesLedBy(leaderId: string): Promise<Activity[]> {
+  const activities = await store.allActivities();
+  const led = activities.filter((activity) => activity.leaderId === leaderId);
+  return sortActivities(led, "date", "desc");
+}
+
 /* -------------------------------- mutations ------------------------------- */
 
 /** Rejects a leader id that does not belong to a real account. */
