@@ -1,0 +1,311 @@
+@import "tailwindcss";
+
+/* Theme is class-driven so the toggle can override the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* -------------------------------------------------------------------------- */
+/* Design tokens                                                              */
+/*                                                                            */
+/* Light values live on :root; the dark block redefines only what changes.    */
+/* Data-mark colors come from a validated palette - see README.               */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --page: #f4f6f4;
+  --surface: #ffffff;
+  --surface-muted: #f8faf8;
+  --surface-hover: #f1f4f1;
+  --surface-inset: #eef2ef;
+
+  /* Hairlines */
+  --line: #e2e7e3;
+  --line-strong: #d2d9d4;
+
+  /* Ink */
+  --ink: #0f1613;
+  --ink-secondary: #57605a;
+  --ink-muted: #838d87;
+  --ink-inverse: #ffffff;
+
+  /* Brand - forest green */
+  --brand-50: #eef7f1;
+  --brand-100: #d6ecdf;
+  --brand-200: #aed9c0;
+  --brand-300: #7dc09b;
+  --brand-400: #4aa176;
+  --brand-500: #2b8459;
+  --brand-600: #1e6a47;
+  --brand-700: #19553a;
+  --brand-800: #154431;
+  --brand-900: #12382a;
+
+  --brand-solid: var(--brand-600);
+  --brand-solid-hover: var(--brand-700);
+  --brand-text: #1a5f40;
+  --brand-soft: var(--brand-50);
+  --brand-soft-hover: var(--brand-100);
+  --brand-border: var(--brand-200);
+
+  /* Data marks (validated against this surface) */
+  --viz-accent: #2a78d6;
+  --viz-accent-soft: #9ec5f4;
+  --viz-track: #cde2fb;
+
+  /* Status - fixed, never themed. Always paired with an icon or label. */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  /* Delta text */
+  --positive-text: #006300;
+  --negative-text: #c0332f;
+
+  --ring: var(--brand-500);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --page: #0a0c0b;
+  --surface: #141817;
+  --surface-muted: #1a1f1d;
+  --surface-hover: #212724;
+  --surface-inset: #1e2422;
+
+  --line: #262d29;
+  --line-strong: #333b36;
+
+  --ink: #f2f5f3;
+  --ink-secondary: #aeb6b1;
+  --ink-muted: #7f8a84;
+  --ink-inverse: #0a0c0b;
+
+  --brand-solid: var(--brand-500);
+  --brand-solid-hover: var(--brand-400);
+  --brand-text: #6ab98f;
+  --brand-soft: #16241d;
+  --brand-soft-hover: #1b2e24;
+  --brand-border: #22402f;
+
+  /* Dark steps of the same ramps, selected for the dark surface. */
+  --viz-accent: #3987e5;
+  --viz-accent-soft: #1c5cab;
+  --viz-track: #0d366b;
+
+  --positive-text: #0ca30c;
+  --negative-text: #f08a8a;
+
+  --ring: var(--brand-400);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tailwind theme mapping                                                     */
+/* -------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-inset: var(--surface-inset);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-inverse: var(--ink-inverse);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-solid-hover: var(--brand-solid-hover);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-hover: var(--brand-soft-hover);
+  --color-brand-border: var(--brand-border);
+
+  --color-viz-accent: var(--viz-accent);
+  --color-viz-accent-soft: var(--viz-accent-soft);
+  --color-viz-track: var(--viz-track);
+
+  --color-status-good: var(--status-good);
+  --color-status-warning: var(--status-warning);
+  --color-status-serious: var(--status-serious);
+  --color-status-critical: var(--status-critical);
+
+  --color-positive: var(--positive-text);
+  --color-negative: var(--negative-text);
+
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Base                                                                        */
+/* -------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--brand-200);
+    color: var(--brand-900);
+  }
+
+  .dark ::selection {
+    background-color: var(--brand-700);
+    color: var(--brand-50);
+  }
+}
+
+@layer utilities {
+  /* Slim scrollbar for the sidebar and any inner scroll region. */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Motion                                                                      */
+/* -------------------------------------------------------------------------- */
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.popover-panel {
+  animation: popover-in 130ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top;
+}
+
+.overlay-in {
+  animation: overlay-in 160ms ease-out;
+}
+
+.drawer-in {
+  animation: drawer-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dialogs                                                                     */
+/*                                                                            */
+/* The native <dialog> element supplies the focus trap, Escape handling and    */
+/* top-layer stacking; these rules give it the app's backdrop and motion.      */
+/* -------------------------------------------------------------------------- */
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+dialog::backdrop {
+  background-color: rgb(0 0 0 / 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+dialog[open] {
+  animation: dialog-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+dialog[open]::backdrop {
+  animation: overlay-in 160ms ease-out;
+}
+
+/* Keeps the page behind a modal from scrolling. */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
