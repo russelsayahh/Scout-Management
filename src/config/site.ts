@@ -1,10 +1,10 @@
 export const siteConfig = {
-  name: "Trailhead",
-  tagline: "Scout Management Platform",
+  name: "Groupe Saint Roch",
+  tagline: "Scouts de Secours Libanais · Kleiat",
   description:
     "Manage scouts, leaders, patrols, activities, camps, attendance, equipment and documents in one place.",
   /** The organisation currently in context. Replaced by real data later. */
-  organisation: "1st Riverside Scout Group",
+  organisation: "Scouts de Secours Libanais - Groupe College Saint Roch, Kleiat",
   version: "0.1.0",
 } as const;
 

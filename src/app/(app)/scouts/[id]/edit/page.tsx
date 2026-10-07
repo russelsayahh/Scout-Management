@@ -6,9 +6,11 @@ import { AccessDenied } from "@/components/shared/access-denied";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import { patrolOptions } from "@/lib/patrols/service";
 import { getScout } from "@/lib/scouts/service";
 import { scoutFullName } from "@/lib/scouts/types";
+import { troopsInScope } from "@/lib/troops/service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -29,9 +31,10 @@ export default async function EditScoutPage({ params }: PageProps) {
 
   const { id } = await params;
   const scout = await getScout(id);
-  if (!scout) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!scout || !inScope(scope, scout.troopId)) notFound();
 
-  const patrols = await patrolOptions();
+  const [patrols, troops] = await Promise.all([patrolOptions(scope), troopsInScope(scope)]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -41,7 +44,7 @@ export default async function EditScoutPage({ params }: PageProps) {
         description="Changes are saved to the register immediately."
       />
 
-      <ScoutForm mode="edit" scout={scout} patrols={patrols} />
+      <ScoutForm mode="edit" scout={scout} patrols={patrols} troops={troops} />
     </div>
   );
 }

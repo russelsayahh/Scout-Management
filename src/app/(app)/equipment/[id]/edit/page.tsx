@@ -7,6 +7,7 @@ import { Callout } from "@/components/ui/callout";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { getItem } from "@/lib/equipment/service";
 
 interface PageProps {
@@ -15,7 +16,9 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const found = await getItem(id, new Date());
+  // Only the item's own name is needed for the title, and the catalog is
+  // shared, so nothing here depends on who is asking.
+  const found = await getItem("all", id, new Date());
 
   return { title: found ? `Edit ${found.item.name}` : "Equipment not found" };
 }
@@ -27,7 +30,8 @@ export default async function EditEquipmentPage({ params }: PageProps) {
   }
 
   const { id } = await params;
-  const found = await getItem(id, new Date());
+  const scope = await resolveTroopScope(user);
+  const found = await getItem(scope, id, new Date());
   if (!found) notFound();
 
   const { item } = found;

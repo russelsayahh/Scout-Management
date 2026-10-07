@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { campCounts, campFilterLabels, listCamps, type CampFilter } from "@/lib/camps/service";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +38,7 @@ export default async function CampsPage({
   }
 
   const canManage = can(user.role, "camps.manage");
+  const scope = await resolveTroopScope(user);
 
   // One reference instant for the whole request, so nothing on the page can
   // disagree about which camps are still to come.
@@ -45,7 +47,10 @@ export default async function CampsPage({
   const params = await searchParams;
   const filter = parseFilter(params.show);
 
-  const [camps, counts] = await Promise.all([listCamps(filter, now), campCounts(now)]);
+  const [camps, counts] = await Promise.all([
+    listCamps(scope, filter, now),
+    campCounts(scope, now),
+  ]);
 
   const hrefFor = (value: CampFilter) => (value === "upcoming" ? "/camps" : `/camps?show=${value}`);
 

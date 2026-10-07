@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
+import type { TroopScope } from "@/lib/auth/troop-scope";
+import { inScope } from "@/lib/auth/troop-scope";
 import { createJsonStore } from "@/lib/json-store";
+import { troopSlug } from "@/lib/troops/types";
 import {
   patrolSlug,
   type Patrol,
@@ -16,36 +19,73 @@ import {
 
 const SEEDED_AT = "2026-08-01T09:00:00.000Z";
 
-/** The troop's standing patrols. Ids are slugs so the seed data stays readable. */
-const SEED: [name: string, description: string, status: PatrolStatus][] = [
-  ["Kestrel", "The troop's oldest patrol, strong on navigation and hillcraft.", "active"],
-  ["Falcon", "Known for pioneering and camp gadgets.", "active"],
-  ["Otter", "Water activities specialists - kayaking and rafting.", "active"],
-  ["Kingfisher", "Focused on backwoods cooking and fire lighting.", "active"],
-  ["Badger", "Night hikes, wide games and expedition work.", "active"],
-  ["Heron", "Strong first aid and emergency-aid record.", "active"],
-  ["Peregrine", "Climbing and high-ropes enthusiasts.", "active"],
-  ["Osprey", "Newest patrol, building up its membership.", "forming"],
+/**
+ * The troop's standing patrols. Ids are slugs so the seed data stays
+ * readable. Each patrol belongs to exactly one troop - `scouts/seed-data.ts`
+ * and the activity/camp seeds resolve a patrol's troop through
+ * `patrolTroopName` below, so this table is the single source of truth for
+ * which patrol sits in which troop.
+ */
+const SEED: [name: string, description: string, status: PatrolStatus, troop: string][] = [
+  ["Kestrel", "The troop's oldest patrol, strong on navigation and hillcraft.", "active", "Jeannettes"],
+  ["Falcon", "Known for pioneering and camp gadgets.", "active", "Louveteaux"],
+  ["Otter", "Water activities specialists - kayaking and rafting.", "active", "Guides"],
+  ["Kingfisher", "Focused on backwoods cooking and fire lighting.", "active", "Guides"],
+  ["Badger", "Night hikes, wide games and expedition work.", "active", "Scouts"],
+  ["Heron", "Strong first aid and emergency-aid record.", "active", "Scouts"],
+  ["Peregrine", "Climbing and high-ropes enthusiasts.", "active", "Caravelles"],
+  ["Osprey", "Newest patrol, building up its membership.", "forming", "Routiers"],
 ];
 
-const store = createJsonStore<Patrol>("patrols.json", () =>
-  SEED.map(([name, description, status]) => ({
-    id: patrolSlug(name),
-    name,
-    description,
-    // Leaders are appointed after seeding, from the patrol's own members.
-    patrolLeaderId: null,
-    status,
-    archived: false,
-    archivedAt: null,
-    archiveReason: "",
-    createdAt: SEEDED_AT,
-    updatedAt: SEEDED_AT,
-  })),
+/** Patrol name -> troop id, e.g. `"Kestrel"` -> `"jeannettes"`. */
+const PATROL_TROOP_NAME: Record<string, string> = Object.fromEntries(
+  SEED.map(([name, , , troop]) => [name, troopSlug(troop)]),
+);
+
+/** Patrol id (slug) -> troop id, for migrating older records synchronously. */
+export const PATROL_TROOP_BY_SLUG: Record<string, string> = Object.fromEntries(
+  SEED.map(([name, , , troop]) => [patrolSlug(name), troopSlug(troop)]),
+);
+
+/** The troop a seeded patrol belongs to, resolved by name. Falls back to Scouts for anything unrecognised. */
+export function patrolTroopName(patrolName: string): string {
+  return PATROL_TROOP_NAME[patrolName] ?? troopSlug("Scouts");
+}
+
+/** Records written before troops existed carried no `troopId`. */
+function migratePatrol(record: Patrol): Patrol {
+  if (record.troopId !== undefined) return record;
+  return { ...record, troopId: patrolTroopName(record.name) };
+}
+
+const store = createJsonStore<Patrol>(
+  "patrols.json",
+  () =>
+    SEED.map(([name, description, status, troop]) => ({
+      id: patrolSlug(name),
+      name,
+      description,
+      // Leaders are appointed after seeding, from the patrol's own members.
+      patrolLeaderId: null,
+      status,
+      troopId: troopSlug(troop),
+      archived: false,
+      archivedAt: null,
+      archiveReason: "",
+      createdAt: SEEDED_AT,
+      updatedAt: SEEDED_AT,
+    })),
+  { migrate: migratePatrol, autoSeed: false },
 );
 
 export async function allPatrols(): Promise<Patrol[]> {
   return store.all();
+}
+
+/** Patrols visible under `scope` - every patrol for an admin, or just the caller's troop(s) otherwise. */
+export async function patrolsInScope(scope: TroopScope): Promise<Patrol[]> {
+  const patrols = await store.all();
+  return patrols.filter((patrol) => inScope(scope, patrol.troopId));
 }
 
 export async function findPatrol(id: string): Promise<Patrol | null> {
@@ -82,10 +122,13 @@ export async function createPatrol(details: PatrolDetails): Promise<Patrol> {
   });
 }
 
-/** Returns the updated patrol, or null when the id no longer exists. */
+/**
+ * Returns the updated patrol, or null when the id no longer exists.
+ * `troopId` is never accepted here - see the note on `Patrol.troopId`.
+ */
 export async function updatePatrol(
   id: string,
-  changes: Partial<Omit<Patrol, "id" | "createdAt">>,
+  changes: Partial<Omit<Patrol, "id" | "createdAt" | "troopId">>,
 ): Promise<Patrol | null> {
   return store.mutate((patrols) => {
     const index = patrols.findIndex((patrol) => patrol.id === id);

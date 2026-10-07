@@ -35,6 +35,7 @@ import {
   validateLastName,
   validateMedicalNotes,
 } from "@/lib/scouts/validation";
+import type { Troop } from "@/lib/troops/types";
 import {
   validateOptionalEmail,
   validatePhone,
@@ -49,14 +50,18 @@ import {
  * same validators the fields use on blur, so the rules live in one place.
  */
 type ScoutFormProps = ({ mode: "create"; scout?: undefined } | { mode: "edit"; scout: Scout }) & {
-  /** Patrols a scout may be placed in, resolved on the server. */
-  patrols: { id: string; name: string }[];
+  /** Patrols a scout may be placed in, resolved on the server - already scoped to the caller's troop(s). */
+  patrols: { id: string; name: string; troopId: string }[];
+  /** Troops the caller may place a scout in - a leader sees only their own. */
+  troops: Troop[];
 };
 
-export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
+export function ScoutForm({ mode, scout, patrols, troops }: ScoutFormProps) {
   const action = mode === "create" ? createScoutAction : updateScoutAction;
   const [state, formAction, pending] = useActionState(action, initialFormState);
   const { errors, setFieldError, clearField } = useFieldErrors(state);
+
+  const initial = (field: string, fallback: string) => state.values?.[field] ?? fallback;
 
   // Controlled where a value feeds something else: the avatar initials, the
   // join-date cross-check, and the status hint.
@@ -68,8 +73,14 @@ export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
   const [status, setStatus] = useState<ScoutStatus>(
     (state.values?.status as ScoutStatus) ?? scout?.status ?? "active",
   );
+  const [troopId, setTroopId] = useState(
+    initial("troopId", scout?.troopId ?? troops[0]?.id ?? ""),
+  );
 
-  const initial = (field: string, fallback: string) => state.values?.[field] ?? fallback;
+  // A scout's patrol has to belong to their troop, so switching the troop
+  // clears any patrol that no longer applies.
+  const patrolsInTroop = patrols.filter((patrol) => patrol.troopId === troopId);
+  const troopLocked = troops.length <= 1;
 
   const displayName = `${firstName} ${lastName}`.trim();
   const formError =
@@ -300,7 +311,7 @@ export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
         </CardHeader>
 
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               label="Join date"
               name="joinDate"
@@ -314,6 +325,35 @@ export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
               disabled={pending}
             />
 
+            <div>
+              {troopLocked && <input type="hidden" name="troopId" value={troopId} />}
+              <SelectField
+                label="Troop"
+                // A disabled select submits nothing, so the locked case is
+                // carried by the hidden input above instead.
+                name={troopLocked ? undefined : "troopId"}
+                value={troopId}
+                onChange={(event) => {
+                  setTroopId(event.target.value);
+                  clearField("troopId");
+                  clearField("patrolId");
+                }}
+                error={errors.troopId}
+                hint={
+                  troopLocked
+                    ? "Set by your own troop assignment."
+                    : "Which section this scout belongs to."
+                }
+                disabled={pending || troopLocked}
+              >
+                {troops.map((troop) => (
+                  <option key={troop.id} value={troop.id}>
+                    {troop.name}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+
             <SelectField
               label="Patrol"
               name="patrolId"
@@ -324,7 +364,7 @@ export function ScoutForm({ mode, scout, patrols }: ScoutFormProps) {
               disabled={pending}
             >
               <option value="">Unassigned</option>
-              {patrols.map((patrol) => (
+              {patrolsInTroop.map((patrol) => (
                 <option key={patrol.id} value={patrol.id}>
                   {patrol.name}
                 </option>

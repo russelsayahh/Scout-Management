@@ -86,6 +86,7 @@ export interface ScoutFormInput {
   emergencyContactPhone: string;
   medicalNotes: string;
   joinDate: string;
+  troopId: string;
   /** Patrol id, or an empty string for unassigned. */
   patrolId: string;
   status: string;
@@ -113,6 +114,7 @@ export function validateScoutInput(input: ScoutFormInput): FieldErrors {
   );
   set("medicalNotes", validateMedicalNotes(input.medicalNotes));
   set("joinDate", validateJoinDate(input.joinDate, input.dateOfBirth));
+  if (!input.troopId) errors.troopId = "Choose a troop.";
   set("status", validateChoice(input.status, SCOUT_STATUSES, "status"));
   set("avatar", validateAvatar(input.avatar));
 
@@ -136,6 +138,7 @@ export function toScoutDetails(input: ScoutFormInput): ScoutDetails {
     emergencyContactPhone: input.emergencyContactPhone.trim(),
     medicalNotes: input.medicalNotes.trim(),
     joinDate: input.joinDate,
+    troopId: input.troopId,
     patrolId: input.patrolId ? input.patrolId : null,
     status: input.status as ScoutDetails["status"],
     avatar: input.avatar,

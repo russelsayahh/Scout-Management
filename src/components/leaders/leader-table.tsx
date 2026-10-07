@@ -34,7 +34,7 @@ function LeaderIdentity({ leader }: { leader: SessionUser }) {
   );
 }
 
-function patrolSummary(names: string[]): string {
+function troopSummary(names: string[]): string {
   if (names.length === 0) return "None assigned";
   if (names.length <= 2) return names.join(", ");
   return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
@@ -42,12 +42,12 @@ function patrolSummary(names: string[]): string {
 
 export function LeaderTable({
   leaders,
-  patrolNamesFor,
+  troopNamesFor,
   canManage,
 }: {
   leaders: SessionUser[];
-  /** Assigned patrol names, resolved on the server. */
-  patrolNamesFor: (leader: SessionUser) => string[];
+  /** Assigned troop names, resolved on the server. */
+  troopNamesFor: (leader: SessionUser) => string[];
   canManage: boolean;
 }) {
   return (
@@ -60,7 +60,7 @@ export function LeaderTable({
               <TH>Leader</TH>
               <TH>Position</TH>
               <TH>Role</TH>
-              <TH>Assigned patrols</TH>
+              <TH>Assigned troop</TH>
               <TH className="text-right">
                 <span className={canManage ? undefined : "sr-only"}>Actions</span>
               </TH>
@@ -81,7 +81,7 @@ export function LeaderTable({
                     {roleLabels[leader.role]}
                   </Badge>
                 </TD>
-                <TD className="text-ink-secondary">{patrolSummary(patrolNamesFor(leader))}</TD>
+                <TD className="text-ink-secondary">{troopSummary(troopNamesFor(leader))}</TD>
                 <TD className="text-right">
                   {canManage && (
                     <Link
@@ -119,9 +119,9 @@ export function LeaderTable({
                 </dd>
               </div>
               <div>
-                <dt className="text-ink-muted">Patrols</dt>
+                <dt className="text-ink-muted">Troop</dt>
                 <dd className="mt-0.5 truncate text-ink-secondary">
-                  {patrolSummary(patrolNamesFor(leader))}
+                  {troopSummary(troopNamesFor(leader))}
                 </dd>
               </div>
             </dl>

@@ -1,23 +1,26 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
-/** Compass-rose mark used in the sidebar, the drawer and the sign-in surfaces. */
+/** Group crest (fleur-de-lis badge) used in the sidebar, the drawer and the sign-in surfaces. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-solid text-white shadow-xs",
+        "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full shadow-xs",
         className,
       )}
     >
-      <svg viewBox="0 0 24 24" className="size-5" aria-hidden focusable="false">
-        <path
-          d="M12 2.6l2.55 6.85L21.4 12l-6.85 2.55L12 21.4l-2.55-6.85L2.6 12l6.85-2.55L12 2.6z"
-          fill="currentColor"
-        />
-      </svg>
+      <Image
+        src="/logo.png"
+        alt=""
+        width={72}
+        height={72}
+        className="size-full object-cover"
+        priority
+      />
     </span>
   );
 }

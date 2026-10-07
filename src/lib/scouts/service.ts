@@ -1,3 +1,5 @@
+import type { TroopScope } from "@/lib/auth/troop-scope";
+import * as patrolStore from "@/lib/patrols/store";
 import {
   applyScoutQuery,
   type PatrolNames,
@@ -11,6 +13,7 @@ import {
   type ScoutDetails,
   type ScoutStatus,
 } from "@/lib/scouts/types";
+import { isTroopId } from "@/lib/troops/store";
 import type { FieldErrors } from "@/lib/validation";
 
 /**
@@ -31,10 +34,11 @@ function failure(message: string, fieldErrors?: FieldErrors): ServiceResult<neve
 /* --------------------------------- queries -------------------------------- */
 
 export async function listScouts(
+  scope: TroopScope,
   query: ScoutQuery,
   patrolNames: PatrolNames = new Map(),
 ): Promise<ScoutPage> {
-  return applyScoutQuery(await store.allScouts(), query, patrolNames);
+  return applyScoutQuery(await store.scoutsInScope(scope), query, patrolNames);
 }
 
 export async function getScout(id: string): Promise<Scout | null> {
@@ -51,8 +55,8 @@ export interface ScoutCounts {
 }
 
 /** Roll-up used by the list header and the sidebar badge. */
-export async function scoutCounts(): Promise<ScoutCounts> {
-  const scouts = await store.allScouts();
+export async function scoutCounts(scope: TroopScope): Promise<ScoutCounts> {
+  const scouts = await store.scoutsInScope(scope);
 
   const byStatus = Object.fromEntries(
     SCOUT_STATUSES.map((status) => [status, 0]),
@@ -79,8 +83,8 @@ export async function scoutCounts(): Promise<ScoutCounts> {
 }
 
 /** Just the number shown on the sidebar badge - current, non-archived scouts. */
-export async function countCurrentScouts(): Promise<number> {
-  const scouts = await store.allScouts();
+export async function countCurrentScouts(scope: TroopScope): Promise<number> {
+  const scouts = await store.scoutsInScope(scope);
   return scouts.filter((scout) => !scout.archived).length;
 }
 
@@ -96,7 +100,31 @@ async function emailConflict(
   });
 }
 
+/**
+ * A scout's troop and patrol have to agree: an unset patrol is always fine,
+ * but a chosen one must belong to the scout's own troop.
+ */
+async function troopPatrolMismatch(details: ScoutDetails): Promise<ServiceResult<never> | null> {
+  if (!(await isTroopId(details.troopId))) {
+    return failure("Choose a troop for this scout.", { troopId: "That troop could not be found." });
+  }
+
+  if (details.patrolId === null) return null;
+
+  const patrol = await patrolStore.findPatrol(details.patrolId);
+  if (!patrol || patrol.troopId !== details.troopId) {
+    return failure("That patrol does not belong to the chosen troop.", {
+      patrolId: "Choose a patrol from the selected troop.",
+    });
+  }
+
+  return null;
+}
+
 export async function addScout(details: ScoutDetails): Promise<ServiceResult<Scout>> {
+  const mismatch = await troopPatrolMismatch(details);
+  if (mismatch) return mismatch;
+
   const conflict = await emailConflict(details.email);
   if (conflict) return conflict;
 
@@ -107,6 +135,9 @@ export async function editScout(
   id: string,
   details: ScoutDetails,
 ): Promise<ServiceResult<Scout>> {
+  const mismatch = await troopPatrolMismatch(details);
+  if (mismatch) return mismatch;
+
   const conflict = await emailConflict(details.email, id);
   if (conflict) return conflict;
 

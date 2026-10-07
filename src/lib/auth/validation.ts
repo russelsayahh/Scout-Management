@@ -47,6 +47,7 @@ export interface RegisterInput {
   email: string;
   phone: string;
   role: string;
+  troopId: string;
   password: string;
   confirmPassword: string;
 }
@@ -65,6 +66,8 @@ export function validateRegisterInput(input: RegisterInput): FieldErrors {
 
   const role = validateRole(input.role, SELF_SIGNUP_ROLES);
   if (role) errors.role = role;
+
+  if (!input.troopId) errors.troopId = "Choose a troop.";
 
   const password = validatePassword(input.password);
   if (password) errors.password = password;

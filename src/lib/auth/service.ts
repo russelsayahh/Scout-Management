@@ -2,6 +2,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import * as store from "@/lib/auth/store";
 import type { Role, SessionUser } from "@/lib/auth/types";
 import type { FieldErrors } from "@/lib/auth/validation";
+import { isTroopId } from "@/lib/troops/store";
 
 /**
  * Authentication and account rules. Everything above this layer (server
@@ -25,11 +26,17 @@ export interface RegisterUserInput {
   phone: string;
   role: Role;
   password: string;
+  /** The troop they lead - required, since this is what scopes everything they see once signed in. */
+  troopId: string;
 }
 
 export async function registerUser(
   input: RegisterUserInput,
 ): Promise<ServiceResult<SessionUser>> {
+  if (!(await isTroopId(input.troopId))) {
+    return failure("Choose a troop.", { troopId: "That troop could not be found." });
+  }
+
   if (await store.emailTaken(input.email)) {
     return failure("That email address is already registered.", {
       email: "An account with this email already exists.",
@@ -42,6 +49,7 @@ export async function registerUser(
     phone: input.phone,
     role: input.role,
     passwordHash: await hashPassword(input.password),
+    assignedTroopIds: [input.troopId],
   });
 
   // createUser returns null only when the email was claimed between the check

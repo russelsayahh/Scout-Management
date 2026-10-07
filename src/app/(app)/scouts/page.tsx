@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { patrolNameMap, patrolOptions } from "@/lib/patrols/service";
 import { parseScoutQuery, scoutsHref } from "@/lib/scouts/query";
 import { listScouts, scoutCounts } from "@/lib/scouts/service";
@@ -33,10 +34,17 @@ export default async function ScoutsPage({
   }
 
   const canManage = can(user.role, "scouts.manage");
+  const scope = await resolveTroopScope(user);
 
   const query = parseScoutQuery(await searchParams);
-  const [patrolNames, patrols] = await Promise.all([patrolNameMap(), patrolOptions()]);
-  const [page, counts] = await Promise.all([listScouts(query, patrolNames), scoutCounts()]);
+  const [patrolNames, patrols] = await Promise.all([
+    patrolNameMap(scope),
+    patrolOptions(scope),
+  ]);
+  const [page, counts] = await Promise.all([
+    listScouts(scope, query, patrolNames),
+    scoutCounts(scope),
+  ]);
 
   // Computed once here so every row agrees on today's date.
   const today = new Date();

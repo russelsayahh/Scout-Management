@@ -7,9 +7,10 @@ import { Callout } from "@/components/ui/callout";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
-import { getCamp, leaderOptions, patrolChoices } from "@/lib/camps/service";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
+import { getCamp, leaderOptions, patrolChoices, troopSizes } from "@/lib/camps/service";
 import { isClosed } from "@/lib/camps/types";
-import * as scoutStore from "@/lib/scouts/store";
+import { troopsInScope } from "@/lib/troops/service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -29,13 +30,15 @@ export default async function EditCampPage({ params }: PageProps) {
   }
 
   const { id } = await params;
-  const [found, patrols, leaders, counts] = await Promise.all([
+  const scope = await resolveTroopScope(user);
+  const [found, patrols, leaders, sizes, troops] = await Promise.all([
     getCamp(id, new Date()),
-    patrolChoices(),
+    patrolChoices(scope),
     leaderOptions(),
-    scoutStore.activeScoutCounts(),
+    troopSizes(scope),
+    troopsInScope(scope),
   ]);
-  if (!found) notFound();
+  if (!found || !inScope(scope, found.camp.troopId)) notFound();
 
   const { camp } = found;
 
@@ -67,7 +70,8 @@ export default async function EditCampPage({ params }: PageProps) {
         registered={camp.registrations.length}
         patrols={patrols}
         leaders={leaders}
-        troopSize={counts.total}
+        troops={troops}
+        troopSizes={sizes}
       />
     </div>
   );

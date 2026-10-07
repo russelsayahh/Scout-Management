@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { PatrolPicker, type PatrolChoice } from "@/components/shared/patrol-picker";
+import { TroopPicker, type TroopChoice } from "@/components/shared/troop-picker";
 import { AvatarField } from "@/components/ui/avatar-field";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -17,8 +18,8 @@ import { initialFormState } from "@/lib/form-state";
 import type { SessionUser } from "@/lib/auth/types";
 import { validateEmail, validatePhone } from "@/lib/validation";
 
-/** A rejected submission returns the ticked patrols as one comma-joined value. */
-function parsePatrolIds(value: string | undefined): string[] | null {
+/** A rejected submission returns ticked ids as one comma-joined value. */
+function parseIdList(value: string | undefined): string[] | null {
   if (value === undefined) return null;
   return value ? value.split(",").filter(Boolean) : [];
 }
@@ -33,12 +34,17 @@ function parsePatrolIds(value: string | undefined): string[] | null {
 export function LeaderForm({
   leader,
   patrols,
+  troops,
   assignedPatrolIds,
+  assignedTroopIds,
 }: {
   leader: SessionUser;
-  /** Patrols this leader may be assigned to, archived ones excluded. */
-  patrols: PatrolChoice[];
+  /** Patrols this leader may be assigned to, archived ones excluded, already scoped to the caller's troop(s). */
+  patrols: (PatrolChoice & { troopId: string })[];
+  /** Troops the caller may assign this leader to - a leader sees only their own. */
+  troops: TroopChoice[];
   assignedPatrolIds: string[];
+  assignedTroopIds: string[];
 }) {
   const [state, formAction, pending] = useActionState(updateLeaderAction, initialFormState);
   const { errors, setFieldError, clearField } = useFieldErrors(state);
@@ -46,9 +52,30 @@ export function LeaderForm({
   const initial = (field: string, fallback: string) => state.values?.[field] ?? fallback;
 
   const [name, setName] = useState(initial("name", leader.name));
-  const [selectedPatrols, setSelectedPatrols] = useState<string[]>(
-    parsePatrolIds(state.values?.patrolIds) ?? assignedPatrolIds,
+  const [selectedTroops, setSelectedTroops] = useState<string[]>(
+    parseIdList(state.values?.troopIds) ?? assignedTroopIds,
   );
+  const [selectedPatrols, setSelectedPatrols] = useState<string[]>(
+    parseIdList(state.values?.patrolIds) ?? assignedPatrolIds,
+  );
+
+  // A leader's patrol responsibility has to sit inside their assigned troops,
+  // so the picker only ever offers patrols from troops currently ticked.
+  const patrolTroopById = new Map(patrols.map((patrol) => [patrol.id, patrol.troopId]));
+  const patrolsInTroops = patrols.filter((patrol) => selectedTroops.includes(patrol.troopId));
+  const troopLocked = troops.length <= 1;
+
+  function handleTroopsChange(next: string[]) {
+    setSelectedTroops(next);
+    clearField("troopIds");
+    // Dropping a troop can strand a patrol responsibility that no longer applies.
+    setSelectedPatrols((current) =>
+      current.filter((id) => {
+        const troopId = patrolTroopById.get(id);
+        return troopId !== undefined && next.includes(troopId);
+      }),
+    );
+  }
 
   const formError =
     state.status === "error" && Object.keys(errors).length === 0 ? state.message : undefined;
@@ -151,6 +178,28 @@ export function LeaderForm({
         </CardContent>
       </Card>
 
+      {/* Troop access */}
+      <Card>
+        <CardHeader>
+          <div>
+            <CardTitle>Troop access</CardTitle>
+            <p className="mt-0.5 text-[13px] text-ink-secondary">
+              Which sections this leader can see and manage records for.
+            </p>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <TroopPicker
+            troops={troops}
+            selected={selectedTroops}
+            onChange={handleTroopsChange}
+            disabled={pending || troopLocked}
+            error={errors.troopIds}
+          />
+        </CardContent>
+      </Card>
+
       {/* Assignment */}
       <Card>
         <CardHeader>
@@ -164,7 +213,7 @@ export function LeaderForm({
 
         <CardContent>
           <PatrolPicker
-            patrols={patrols}
+            patrols={patrolsInTroops}
             selected={selectedPatrols}
             onChange={setSelectedPatrols}
             disabled={pending}

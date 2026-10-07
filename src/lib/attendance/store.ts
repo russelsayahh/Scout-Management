@@ -1,14 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 import * as activityStore from "@/lib/activities/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
 import type {
   AttendanceEntry,
   AttendanceEventKind,
   AttendanceMark,
   AttendanceRecord,
 } from "@/lib/attendance/types";
+import * as campStore from "@/lib/camps/store";
 import { createJsonStore } from "@/lib/json-store";
 import * as scoutStore from "@/lib/scouts/store";
+import { troopSlug } from "@/lib/troops/types";
 
 /**
  * Register repository - the only module that knows how attendance is persisted.
@@ -69,13 +72,62 @@ function seededNote(scoutId: string, activityId: string, mark: AttendanceMark): 
   return "";
 }
 
-type LegacyRecord = AttendanceRecord & { updatedBy?: string };
+type LegacyRecord = AttendanceRecord & { updatedBy?: string; troopId?: string };
 
 /** Registers written before `updatedBy` existed are read as never edited. */
 function migrateRecord(record: AttendanceRecord): AttendanceRecord {
   const legacy = record as LegacyRecord;
   if (legacy.updatedBy !== undefined) return record;
   return { ...record, updatedBy: record.takenBy };
+}
+
+/**
+ * A register's troop is always its event's troop, so it is resolved by
+ * looking the event up rather than stored independently anywhere else. An
+ * event that no longer exists (an orphaned register) falls back to Scouts,
+ * matching `migrateScout`'s fallback for the same situation.
+ */
+async function resolveEventTroopId(
+  eventKind: AttendanceEventKind,
+  eventId: string,
+): Promise<string> {
+  if (eventKind === "activity") {
+    const activity = await activityStore.findActivity(eventId);
+    return activity?.troopId ?? troopSlug("Scouts");
+  }
+  const camp = await campStore.findCamp(eventId);
+  return camp?.troopId ?? troopSlug("Scouts");
+}
+
+/**
+ * Backfills `troopId` on registers written before troops existed.
+ *
+ * This cannot live in `migrate` (unlike `migratePatrol`/`migrateScout`)
+ * because resolving it means reading the activities/camps stores, which is
+ * async - `createJsonStore`'s migrate hook is a pure, synchronous per-record
+ * function. So it runs here instead, on every read, and persists what it
+ * finds so the file heals itself the same way a `migrate` hook would.
+ */
+async function backfillTroopIds(records: AttendanceRecord[]): Promise<AttendanceRecord[]> {
+  const missing = records.filter((record) => (record as LegacyRecord).troopId === undefined);
+  if (missing.length === 0) return records;
+
+  const resolved = new Map<string, string>();
+  for (const record of missing) {
+    const key = `${record.eventKind}:${record.eventId}`;
+    if (resolved.has(key)) continue;
+    resolved.set(key, await resolveEventTroopId(record.eventKind, record.eventId));
+  }
+
+  return store.mutate((current) => {
+    for (let index = 0; index < current.length; index += 1) {
+      const record = current[index];
+      if ((record as LegacyRecord).troopId !== undefined) continue;
+      const troopId = resolved.get(`${record.eventKind}:${record.eventId}`);
+      if (troopId !== undefined) current[index] = { ...record, troopId };
+    }
+    return current;
+  });
 }
 
 /**
@@ -118,6 +170,7 @@ const store = createJsonStore<AttendanceRecord>(
           id: `${activity.id}-register`,
           eventKind: "activity" as const,
           eventId: activity.id,
+          troopId: activity.troopId,
           entries,
           takenBy: activity.leaderId,
           takenAt,
@@ -126,20 +179,26 @@ const store = createJsonStore<AttendanceRecord>(
         };
       });
   },
-  { migrate: migrateRecord },
+  { migrate: migrateRecord, autoSeed: false },
 );
 
 /* --------------------------------- queries -------------------------------- */
 
 export async function allRecords(): Promise<AttendanceRecord[]> {
-  return store.all();
+  return backfillTroopIds(await store.all());
+}
+
+/** Registers visible under `scope` - every register for an admin, or just the caller's troop(s) otherwise. */
+export async function attendanceInScope(scope: TroopScope): Promise<AttendanceRecord[]> {
+  const records = await allRecords();
+  return records.filter((record) => inScope(scope, record.troopId));
 }
 
 export async function findRecord(
   eventKind: AttendanceEventKind,
   eventId: string,
 ): Promise<AttendanceRecord | null> {
-  const records = await store.all();
+  const records = await allRecords();
   return (
     records.find((record) => record.eventKind === eventKind && record.eventId === eventId) ??
     null
@@ -148,7 +207,7 @@ export async function findRecord(
 
 /** Event ids that already have a register, for the "still to take" list. */
 export async function recordedEventIds(eventKind: AttendanceEventKind): Promise<Set<string>> {
-  const records = await store.all();
+  const records = await allRecords();
   return new Set(
     records.filter((record) => record.eventKind === eventKind).map((record) => record.eventId),
   );
@@ -168,6 +227,10 @@ export async function saveRecord(
   entries: AttendanceEntry[],
   savedBy: string,
 ): Promise<AttendanceRecord> {
+  // Resolved before the lock: it only reads the event, which never changes
+  // because of anything happening to the register itself.
+  const troopId = await resolveEventTroopId(eventKind, eventId);
+
   return store.mutate((records) => {
     const now = new Date().toISOString();
     const index = records.findIndex(
@@ -179,6 +242,7 @@ export async function saveRecord(
         id: randomUUID(),
         eventKind,
         eventId,
+        troopId,
         entries,
         takenBy: savedBy,
         takenAt: now,

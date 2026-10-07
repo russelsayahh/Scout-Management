@@ -7,7 +7,8 @@ import { Callout } from "@/components/ui/callout";
 import { activitiesLedBy } from "@/lib/activities/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
-import { assignedPatrols, getLeader } from "@/lib/leaders/service";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
+import { assignedPatrols, getLeader, leaderInScope } from "@/lib/leaders/service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,6 +31,9 @@ export default async function LeaderDetailPage({ params, searchParams }: PagePro
   const { id } = await params;
   const leader = await getLeader(id);
   if (!leader) notFound();
+
+  const scope = await resolveTroopScope(user);
+  if (!leaderInScope(leader, scope)) notFound();
 
   const saved = "saved" in (await searchParams);
 

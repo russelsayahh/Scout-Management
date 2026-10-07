@@ -1,7 +1,10 @@
 import * as userStore from "@/lib/auth/store";
 import type { Role, SessionUser } from "@/lib/auth/types";
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import * as patrolStore from "@/lib/patrols/store";
 import * as scoutStore from "@/lib/scouts/store";
+import { troopsInScope } from "@/lib/troops/service";
+import { isTroopId } from "@/lib/troops/store";
 import type { FieldErrors } from "@/lib/validation";
 
 /**
@@ -24,9 +27,19 @@ function failure(message: string, fieldErrors?: FieldErrors): ServiceResult<neve
 
 /* --------------------------------- queries -------------------------------- */
 
-export async function listLeaders(): Promise<SessionUser[]> {
+/**
+ * True when a leader's own troop assignment overlaps `scope` - an
+ * administrator's "all" scope always overlaps, even against an administrator
+ * target whose own `assignedTroopIds` is empty and therefore ignored.
+ */
+export function leaderInScope(leader: Pick<SessionUser, "assignedTroopIds">, scope: TroopScope): boolean {
+  return scope === "all" || leader.assignedTroopIds.some((id) => scope.includes(id));
+}
+
+/** Leaders visible under `scope` - every leader for an admin, or just those sharing a troop otherwise. */
+export async function listLeaders(scope: TroopScope): Promise<SessionUser[]> {
   const users = await userStore.listUsers();
-  return users.map(userStore.toSessionUser);
+  return users.filter((user) => leaderInScope(user, scope)).map(userStore.toSessionUser);
 }
 
 export async function getLeader(id: string): Promise<SessionUser | null> {
@@ -34,12 +47,13 @@ export async function getLeader(id: string): Promise<SessionUser | null> {
   return user ? userStore.toSessionUser(user) : null;
 }
 
-export async function leaderCounts(): Promise<{ role: Role; count: number }[]> {
+export async function leaderCounts(scope: TroopScope): Promise<{ role: Role; count: number }[]> {
   const users = await userStore.listUsers();
+  const visible = users.filter((user) => leaderInScope(user, scope));
   const roles: Role[] = ["administrator", "scout-leader", "assistant-leader"];
   return roles.map((role) => ({
     role,
-    count: users.filter((user) => user.role === role).length,
+    count: visible.filter((user) => user.role === role).length,
   }));
 }
 
@@ -48,12 +62,13 @@ export interface PatrolChoice {
   name: string;
   /** Active scouts currently in the patrol. */
   memberCount: number;
+  troopId: string;
 }
 
-/** Patrols a leader may be assigned to, archived ones excluded. */
-export async function patrolChoices(): Promise<PatrolChoice[]> {
+/** Patrols a leader may be assigned to, archived ones excluded, and scoped to the caller's own troop(s). */
+export async function patrolChoices(scope: TroopScope): Promise<PatrolChoice[]> {
   const [patrols, counts] = await Promise.all([
-    patrolStore.allPatrols(),
+    patrolStore.patrolsInScope(scope),
     scoutStore.activeScoutCounts(),
   ]);
 
@@ -63,8 +78,15 @@ export async function patrolChoices(): Promise<PatrolChoice[]> {
       id: patrol.id,
       name: patrol.name,
       memberCount: counts.byPatrol.get(patrol.id) ?? 0,
+      troopId: patrol.troopId,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Troops a leader may be assigned to - a caller with a narrower scope sees only their own. */
+export async function troopChoices(scope: TroopScope): Promise<{ id: string; name: string }[]> {
+  const troops = await troopsInScope(scope);
+  return troops.map((troop) => ({ id: troop.id, name: troop.name }));
 }
 
 export interface AssignedPatrol {
@@ -116,6 +138,38 @@ async function patrolsInvalid(patrolIds: string[]): Promise<ServiceResult<never>
   return null;
 }
 
+/** Rejects troop ids that are not one of the six real troops. */
+async function troopsInvalid(troopIds: string[]): Promise<ServiceResult<never> | null> {
+  for (const id of troopIds) {
+    if (!(await isTroopId(id))) return failure("One of those troops could not be found.");
+  }
+  return null;
+}
+
+/**
+ * A leader's patrol responsibility has to sit inside their own troop
+ * assignment - a patrol from a troop they are not assigned to would be a
+ * responsibility they cannot otherwise act on.
+ */
+async function patrolsOutsideTroops(
+  patrolIds: string[],
+  troopIds: string[],
+): Promise<ServiceResult<never> | null> {
+  if (patrolIds.length === 0) return null;
+
+  const patrols = await patrolStore.allPatrols();
+  const byId = new Map(patrols.map((patrol) => [patrol.id, patrol]));
+
+  for (const id of patrolIds) {
+    const patrol = byId.get(id);
+    if (patrol && !troopIds.includes(patrol.troopId)) {
+      return failure(`${patrol.name} Patrol is not in one of this leader's assigned troops.`);
+    }
+  }
+
+  return null;
+}
+
 export interface UpdateLeaderInput {
   name: string;
   email: string;
@@ -123,6 +177,7 @@ export interface UpdateLeaderInput {
   position: string;
   avatar: string | null;
   patrolIds: string[];
+  troopIds: string[];
 }
 
 export async function updateLeaderProfile(
@@ -135,8 +190,14 @@ export async function updateLeaderProfile(
     });
   }
 
+  const badTroops = await troopsInvalid(input.troopIds);
+  if (badTroops) return badTroops;
+
   const badPatrols = await patrolsInvalid(input.patrolIds);
   if (badPatrols) return badPatrols;
+
+  const mismatch = await patrolsOutsideTroops(input.patrolIds, input.troopIds);
+  if (mismatch) return mismatch;
 
   const updated = await userStore.updateUser(id, {
     name: input.name,
@@ -145,6 +206,7 @@ export async function updateLeaderProfile(
     position: input.position,
     avatar: input.avatar,
     assignedPatrolIds: input.patrolIds,
+    assignedTroopIds: input.troopIds,
   });
 
   if (!updated) return failure("That leader could not be found.");

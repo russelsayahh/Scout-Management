@@ -19,6 +19,7 @@ import { attendanceOverview } from "@/lib/attendance/service";
 import { ATTENDANCE_TARGET } from "@/lib/attendance/types";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -33,7 +34,8 @@ export default async function AttendancePage() {
   }
 
   const canRecord = can(user.role, "attendance.record");
-  const overview = await attendanceOverview(new Date());
+  const scope = await resolveTroopScope(user);
+  const overview = await attendanceOverview(scope, new Date());
 
   const { tally, registersTaken, outstanding, recent, byPatrol, flagged, trend } = overview;
   const rate = tally.rate ?? 0;

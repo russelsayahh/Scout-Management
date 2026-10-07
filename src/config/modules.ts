@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   FolderOpen,
   Settings,
   ShieldCheck,
@@ -55,27 +54,6 @@ export const modules = {
       { title: "Version history", description: "Keep prior revisions and see what changed." },
       { title: "Permission forms", description: "Templates that generate consent requests per event." },
       { title: "Access control", description: "Decide which roles can view or edit each folder." },
-    ],
-  },
-  reports: {
-    key: "reports",
-    name: "Reports",
-    href: "/reports",
-    icon: BarChart3,
-    permission: "reports.view",
-    description: "Census figures, trends and exports for the group.",
-    summary:
-      "Reporting will turn register, attendance and programme data into the figures the group needs - census returns, retention, growth and finance summaries.",
-    metrics: [
-      { label: "Report templates", value: "9" },
-      { label: "Scheduled", value: "3" },
-      { label: "Last census", value: "Jan 2026" },
-    ],
-    plannedFeatures: [
-      { title: "Census return", description: "Assemble the annual return from live membership data." },
-      { title: "Retention analysis", description: "Joiners, leavers and retention by section and term." },
-      { title: "Custom reports", description: "Build a report from any combination of fields." },
-      { title: "Scheduled exports", description: "Email a report to the executive on a schedule." },
     ],
   },
   settings: {

@@ -6,6 +6,7 @@ import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Meter } from "@/components/ui/meter";
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import { upcomingCamps } from "@/lib/camps/service";
 import { daysUntilDeadline, formatCampLength } from "@/lib/camps/types";
 import { formatDateRange, splitDateParts } from "@/lib/format";
@@ -17,14 +18,16 @@ import { formatDateRange, splitDateParts } from "@/lib/format";
  * not something anyone can act on yet.
  */
 export async function UpcomingCamps({
+  scope,
   canManage,
   limit = 3,
 }: {
+  scope: TroopScope;
   canManage: boolean;
   limit?: number;
 }) {
   const now = new Date();
-  const camps = await upcomingCamps(now, limit);
+  const camps = await upcomingCamps(scope, now, limit);
 
   return (
     <Card className="flex h-full flex-col">

@@ -5,7 +5,9 @@ import { AccessDenied } from "@/components/shared/access-denied";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { patrolOptions } from "@/lib/patrols/service";
+import { troopsInScope } from "@/lib/troops/service";
 
 export const metadata: Metadata = {
   title: "Add a scout",
@@ -18,7 +20,8 @@ export default async function NewScoutPage() {
     return <AccessDenied sectionName="adding scouts" role={user.role} />;
   }
 
-  const patrols = await patrolOptions();
+  const scope = await resolveTroopScope(user);
+  const [patrols, troops] = await Promise.all([patrolOptions(scope), troopsInScope(scope)]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -28,7 +31,7 @@ export default async function NewScoutPage() {
         description="Emergency contact details are required; everything else can be filled in later."
       />
 
-      <ScoutForm mode="create" patrols={patrols} />
+      <ScoutForm mode="create" patrols={patrols} troops={troops} />
     </div>
   );
 }

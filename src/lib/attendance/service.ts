@@ -13,6 +13,7 @@ import {
   type AttendanceTally,
 } from "@/lib/attendance/types";
 import * as userStore from "@/lib/auth/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
 import * as patrolStore from "@/lib/patrols/store";
 import * as scoutStore from "@/lib/scouts/store";
 import { scoutFullName, type Scout } from "@/lib/scouts/types";
@@ -389,14 +390,21 @@ export interface AttendanceOverview {
   trend: { date: string; name: string; rate: number }[];
 }
 
-export async function attendanceOverview(now: Date): Promise<AttendanceOverview> {
-  const [records, activities, scouts, patrols, users] = await Promise.all([
-    store.allRecords(),
+export async function attendanceOverview(
+  scope: TroopScope,
+  now: Date,
+): Promise<AttendanceOverview> {
+  const [records, allActivities, scouts, patrols, users] = await Promise.all([
+    store.attendanceInScope(scope),
     activityStore.allActivities(),
-    scoutStore.allScouts(),
-    patrolStore.allPatrols(),
+    scoutStore.scoutsInScope(scope),
+    patrolStore.patrolsInScope(scope),
     userStore.listUsers(),
   ]);
+
+  // Activities in scope, not just ones with a register - "outstanding" needs
+  // to know about sessions that have happened but have no register yet too.
+  const activities = allActivities.filter((activity) => inScope(scope, activity.troopId));
 
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const scoutById = new Map(scouts.map((scout) => [scout.id, scout]));
@@ -515,14 +523,17 @@ export async function attendanceOverview(now: Date): Promise<AttendanceOverview>
 }
 
 /** The sidebar badge: sessions that have happened and still need a register. */
-export async function countOutstandingRegisters(now: Date): Promise<number> {
+export async function countOutstandingRegisters(scope: TroopScope, now: Date): Promise<number> {
   const [activities, recorded] = await Promise.all([
     activityStore.allActivities(),
     store.recordedEventIds("activity"),
   ]);
 
   return activities.filter(
-    (activity) => registerAvailability(activity, now) === "ready" && !recorded.has(activity.id),
+    (activity) =>
+      inScope(scope, activity.troopId) &&
+      registerAvailability(activity, now) === "ready" &&
+      !recorded.has(activity.id),
   ).length;
 }
 

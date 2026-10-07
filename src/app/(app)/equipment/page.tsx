@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { equipmentHref, parseEquipmentQuery } from "@/lib/equipment/query";
 import { equipmentSummary, listEquipment } from "@/lib/equipment/service";
 import { cn } from "@/lib/utils";
@@ -76,11 +77,14 @@ export default async function EquipmentPage({
   }
 
   const canManage = can(user.role, "equipment.manage");
+  const scope = await resolveTroopScope(user);
 
+  // The catalog itself stays shared across every troop; only the loan-derived
+  // figures in `summary` (onLoan, overdue) are narrowed to scope.
   const query = parseEquipmentQuery(await searchParams);
   const [page, summary] = await Promise.all([
     listEquipment(query),
-    equipmentSummary(new Date()),
+    equipmentSummary(scope, new Date()),
   ]);
 
   const from = (page.page - 1) * page.pageSize + 1;

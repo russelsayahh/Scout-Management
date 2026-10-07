@@ -11,6 +11,8 @@ export interface DemoAccount {
   email: string;
   phone: string;
   role: Role;
+  /** Troop ids this account can access. Ignored for an administrator. */
+  assignedTroopIds: string[];
 }
 
 export const DEMO_PASSWORD = "Trailhead!2026";
@@ -21,17 +23,20 @@ export const demoAccounts: DemoAccount[] = [
     email: "admin@1striverside.org",
     phone: "+44 7700 900112",
     role: "administrator",
+    assignedTroopIds: [],
   },
   {
     name: "Priya Raman",
     email: "priya.raman@1striverside.org",
     phone: "+44 7700 900341",
     role: "scout-leader",
+    assignedTroopIds: ["guides", "scouts"],
   },
   {
     name: "Tomasz Nowak",
     email: "tom.nowak@1striverside.org",
     phone: "+44 7700 900876",
     role: "assistant-leader",
+    assignedTroopIds: ["jeannettes", "louveteaux", "caravelles", "routiers"],
   },
 ];

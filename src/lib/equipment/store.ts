@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
+import * as activityStore from "@/lib/activities/store";
 import * as userStore from "@/lib/auth/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
+import * as campStore from "@/lib/camps/store";
 import type {
   AvailabilityStatus,
   EquipmentCategory,
@@ -12,6 +15,7 @@ import type {
 } from "@/lib/equipment/types";
 import { equipmentSlug } from "@/lib/equipment/types";
 import { createJsonStore } from "@/lib/json-store";
+import { troopSlug } from "@/lib/troops/types";
 
 /**
  * Equipment repository - the only module that knows how the store and its
@@ -345,6 +349,7 @@ const itemStore = createJsonStore<EquipmentItem>("equipment.json", () =>
     createdAt: SEEDED_AT,
     updatedAt: SEEDED_AT,
   })),
+  { autoSeed: false },
 );
 
 /* --------------------------------- loans ---------------------------------- */
@@ -436,36 +441,88 @@ const SEED_LOANS: SeedLoan[] = [
   },
 ];
 
+/**
+ * Who a loan belongs to, resolved from its holder.
+ *
+ * An activity or camp lends the loan its own troop directly. A leader is a
+ * soft attribution rather than a hard boundary - equipment is not a strict
+ * per-troop resource - so a leader assigned to several troops just gets the
+ * first, and one with none (an administrator, say) falls back to Scouts.
+ */
+async function resolveHolderTroopId(holderKind: HolderKind, holderId: string): Promise<string> {
+  if (holderKind === "activity") {
+    const activity = await activityStore.findActivity(holderId);
+    return activity?.troopId ?? troopSlug("Scouts");
+  }
+  if (holderKind === "camp") {
+    const camp = await campStore.findCamp(holderId);
+    return camp?.troopId ?? troopSlug("Scouts");
+  }
+  const user = await userStore.findById(holderId);
+  return user?.assignedTroopIds[0] ?? troopSlug("Scouts");
+}
+
+/**
+ * Backfills `troopId` on loans written before troops existed. Cannot live in a
+ * `migrate` hook, the same as attendance's registers - resolving it means an
+ * async read of the holder's own store.
+ */
+async function backfillLoanTroopIds(loans: EquipmentLoan[]): Promise<EquipmentLoan[]> {
+  const missing = loans.filter((loan) => (loan as Partial<EquipmentLoan>).troopId === undefined);
+  if (missing.length === 0) return loans;
+
+  const resolved = new Map<string, string>();
+  for (const loan of missing) {
+    const key = `${loan.holderKind}:${loan.holderId}`;
+    if (resolved.has(key)) continue;
+    resolved.set(key, await resolveHolderTroopId(loan.holderKind, loan.holderId));
+  }
+
+  return loanStore.mutate((current) => {
+    for (let index = 0; index < current.length; index += 1) {
+      const loan = current[index];
+      if ((loan as Partial<EquipmentLoan>).troopId !== undefined) continue;
+      const troopId = resolved.get(`${loan.holderKind}:${loan.holderId}`);
+      if (troopId !== undefined) current[index] = { ...loan, troopId };
+    }
+    return current;
+  });
+}
+
 const loanStore = createJsonStore<EquipmentLoan>("equipment-loans.json", async () => {
   const users = await userStore.listUsers();
   const byEmail = new Map(users.map((user) => [user.email, user.id]));
   const fallback = users[0]?.id ?? "";
 
-  return SEED_LOANS.map((entry, index) => {
-    const checkedOutBy = byEmail.get(entry.byEmail) ?? fallback;
-    const holderId =
-      entry.holderKind === "leader"
-        ? (byEmail.get(entry.holder) ?? fallback)
-        : entry.holder;
+  return Promise.all(
+    SEED_LOANS.map(async (entry, index) => {
+      const checkedOutBy = byEmail.get(entry.byEmail) ?? fallback;
+      const holderId =
+        entry.holderKind === "leader"
+          ? (byEmail.get(entry.holder) ?? fallback)
+          : entry.holder;
+      const troopId = await resolveHolderTroopId(entry.holderKind, holderId);
 
-    return {
-      id: `seed-loan-${index + 1}`,
-      itemId: equipmentSlug(entry.item),
-      quantity: entry.quantity,
-      holderKind: entry.holderKind,
-      holderId,
-      checkedOutAt: entry.checkedOutAt,
-      checkedOutBy,
-      dueBack: entry.dueBack ?? null,
-      note: entry.note ?? "",
-      returnedAt: entry.returned?.at ?? null,
-      returnedBy: entry.returned ? checkedOutBy : null,
-      returnedGood: entry.returned?.good ?? 0,
-      returnedDamaged: entry.returned?.damaged ?? 0,
-      returnedLost: entry.returned?.lost ?? 0,
-    };
-  });
-});
+      return {
+        id: `seed-loan-${index + 1}`,
+        itemId: equipmentSlug(entry.item),
+        quantity: entry.quantity,
+        holderKind: entry.holderKind,
+        holderId,
+        troopId,
+        checkedOutAt: entry.checkedOutAt,
+        checkedOutBy,
+        dueBack: entry.dueBack ?? null,
+        note: entry.note ?? "",
+        returnedAt: entry.returned?.at ?? null,
+        returnedBy: entry.returned ? checkedOutBy : null,
+        returnedGood: entry.returned?.good ?? 0,
+        returnedDamaged: entry.returned?.damaged ?? 0,
+        returnedLost: entry.returned?.lost ?? 0,
+      };
+    }),
+  );
+}, { autoSeed: false });
 
 /* --------------------------------- queries -------------------------------- */
 
@@ -479,11 +536,17 @@ export async function findItem(id: string): Promise<EquipmentItem | null> {
 }
 
 export async function allLoans(): Promise<EquipmentLoan[]> {
-  return loanStore.all();
+  return backfillLoanTroopIds(await loanStore.all());
+}
+
+/** Loans visible under `scope` - every loan for an admin, or just the caller's troop(s) otherwise. */
+export async function loansInScope(scope: TroopScope): Promise<EquipmentLoan[]> {
+  const loans = await allLoans();
+  return loans.filter((loan) => inScope(scope, loan.troopId));
 }
 
 export async function loansForItem(itemId: string): Promise<EquipmentLoan[]> {
-  const loans = await loanStore.all();
+  const loans = await allLoans();
   return loans.filter((loan) => loan.itemId === itemId);
 }
 
@@ -596,6 +659,10 @@ export async function checkOut(
   input: CheckoutInput,
   quantityOwned: number,
 ): Promise<EquipmentLoan | { overBy: number }> {
+  // Resolved before the lock: it only reads the holder, which the checkout
+  // itself never changes.
+  const troopId = await resolveHolderTroopId(input.holderKind, input.holderId);
+
   return loanStore.mutate((loans) => {
     const onLoan = loans
       .filter((loan) => loan.itemId === input.itemId && loan.returnedAt === null)
@@ -610,6 +677,7 @@ export async function checkOut(
       quantity: input.quantity,
       holderKind: input.holderKind,
       holderId: input.holderId,
+      troopId,
       checkedOutAt: new Date().toISOString(),
       checkedOutBy: input.checkedOutBy,
       dueBack: input.dueBack,
@@ -650,6 +718,6 @@ export async function closeLoan(
 }
 
 export async function findLoan(loanId: string): Promise<EquipmentLoan | null> {
-  const loans = await loanStore.all();
+  const loans = await allLoans();
   return loans.find((loan) => loan.id === loanId) ?? null;
 }

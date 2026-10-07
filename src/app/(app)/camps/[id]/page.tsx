@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DetailList, EmptyValue } from "@/components/ui/detail-list";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import {
   getCamp,
   leaderOptions,
@@ -59,7 +60,8 @@ export default async function CampDetailPage({ params, searchParams }: PageProps
   const { id } = await params;
   const now = new Date();
   const found = await getCamp(id, now);
-  if (!found) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!found || !inScope(scope, found.camp.troopId)) notFound();
 
   const { camp, leaders, patrols, participants, dashboard, timeline, state } = found;
   const saved = "saved" in (await searchParams);

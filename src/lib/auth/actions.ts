@@ -95,15 +95,17 @@ export async function registerAction(
   const email = field(formData, "email");
   const phone = field(formData, "phone");
   const role = field(formData, "role");
+  const troopId = field(formData, "troopId");
   const password = field(formData, "password");
   const confirmPassword = field(formData, "confirmPassword");
-  const values = { name, email, phone, role };
+  const values = { name, email, phone, role, troopId };
 
   const fieldErrors = validateRegisterInput({
     name,
     email,
     phone,
     role,
+    troopId,
     password,
     confirmPassword,
   });
@@ -115,6 +117,7 @@ export async function registerAction(
     phone,
     // Validation has already confined this to the self-signup roles.
     role: role as Role,
+    troopId,
     password,
   });
 

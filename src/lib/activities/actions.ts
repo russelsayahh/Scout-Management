@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import * as activityStore from "@/lib/activities/store";
 import * as service from "@/lib/activities/service";
 import type { ActivityDetails, ActivityType } from "@/lib/activities/types";
 import {
@@ -11,14 +12,18 @@ import {
 } from "@/lib/activities/validation";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import type { ActionResult, FormState } from "@/lib/form-state";
 import { hasErrors } from "@/lib/validation";
 
 /**
  * Server Actions for the programme.
  *
- * Every one re-checks `activities.manage`. The UI hides these controls from
- * roles without it, but that is presentation - this is the enforcement.
+ * Every one re-checks `activities.manage` and, separately, that the activity
+ * being touched is inside the caller's troop scope - a role permission says
+ * what a leader may do, the scope says which records they may do it to. The UI
+ * hides controls and options accordingly, but that is presentation; these
+ * checks are the enforcement.
  */
 
 function field(formData: FormData, name: string): string {
@@ -31,9 +36,20 @@ const FORBIDDEN: FormState = {
   message: "You do not have permission to change the programme.",
 };
 
-async function canManage(): Promise<boolean> {
+/** Loads the caller and their scope, or null if they may not manage the programme at all. */
+async function manageContext() {
   const user = await getCurrentUser();
-  return Boolean(user && can(user.role, "activities.manage"));
+  if (!user || !can(user.role, "activities.manage")) return null;
+  return { user, scope: await resolveTroopScope(user) };
+}
+
+/** True when `activityId` exists and falls inside `scope`. */
+async function activityInScope(
+  activityId: string,
+  scope: Awaited<ReturnType<typeof resolveTroopScope>>,
+) {
+  const activity = await activityStore.findActivity(activityId);
+  return activity !== null && inScope(scope, activity.troopId);
 }
 
 function readActivityForm(formData: FormData): ActivityFormInput {
@@ -46,6 +62,7 @@ function readActivityForm(formData: FormData): ActivityFormInput {
     location: field(formData, "location"),
     type: field(formData, "type"),
     leaderId: field(formData, "leaderId"),
+    troopId: field(formData, "troopId"),
     // Checkbox groups arrive as one entry per box that is ticked.
     patrolIds: formData
       .getAll("patrolIds")
@@ -65,6 +82,7 @@ function echo(input: ActivityFormInput): Record<string, string> {
     location: input.location,
     type: input.type,
     leaderId: input.leaderId,
+    troopId: input.troopId,
     capacity: input.capacity,
     // Rebuilt into a list by the form; FormState values are strings.
     patrolIds: input.patrolIds.join(","),
@@ -81,6 +99,7 @@ function toDetails(input: ActivityFormInput): ActivityDetails {
     location: input.location,
     type: input.type as ActivityType,
     leaderId: input.leaderId,
+    troopId: input.troopId,
     patrolIds: input.patrolIds,
     capacity: input.capacity.trim() ? Number(input.capacity.trim()) : null,
   };
@@ -103,7 +122,8 @@ export async function createActivityAction(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (!(await canManage())) return FORBIDDEN;
+  const context = await manageContext();
+  if (!context) return FORBIDDEN;
 
   const input = readActivityForm(formData);
   const values = echo(input);
@@ -114,6 +134,18 @@ export async function createActivityAction(
       status: "error",
       message: "Please correct the highlighted fields.",
       fieldErrors,
+      values,
+    };
+  }
+
+  // Whatever troop the form submitted, only one the caller can actually
+  // access is honoured - this is what stops a leader posting another troop's
+  // id straight into the request.
+  if (!inScope(context.scope, input.troopId)) {
+    return {
+      status: "error",
+      message: "Choose a troop you have access to.",
+      fieldErrors: { troopId: "That troop is not available to you." },
       values,
     };
   }
@@ -136,10 +168,14 @@ export async function updateActivityAction(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (!(await canManage())) return FORBIDDEN;
+  const context = await manageContext();
+  if (!context) return FORBIDDEN;
 
   const id = field(formData, "id");
   if (!id) return { status: "error", message: "That activity could not be found." };
+  if (!(await activityInScope(id, context.scope))) {
+    return { status: "error", message: "That activity could not be found." };
+  }
 
   const input = readActivityForm(formData);
   const values = echo(input);
@@ -150,6 +186,15 @@ export async function updateActivityAction(
       status: "error",
       message: "Please correct the highlighted fields.",
       fieldErrors,
+      values,
+    };
+  }
+
+  if (!inScope(context.scope, input.troopId)) {
+    return {
+      status: "error",
+      message: "Choose a troop you have access to.",
+      fieldErrors: { troopId: "That troop is not available to you." },
       values,
     };
   }
@@ -166,8 +211,10 @@ export async function updateActivityAction(
 /* ------------------------------- transitions ------------------------------ */
 
 export async function publishActivityAction(id: string): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to publish activities." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to publish activities." };
+  if (!(await activityInScope(id, context.scope))) {
+    return { ok: false, message: "That activity could not be found." };
   }
 
   const result = await service.publishActivity(id);
@@ -178,8 +225,10 @@ export async function publishActivityAction(id: string): Promise<ActionResult> {
 }
 
 export async function completeActivityAction(id: string): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to change the programme." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to change the programme." };
+  if (!(await activityInScope(id, context.scope))) {
+    return { ok: false, message: "That activity could not be found." };
   }
 
   const result = await service.completeActivity(id, new Date());
@@ -193,8 +242,10 @@ export async function cancelActivityAction(
   id: string,
   reason: string,
 ): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to cancel activities." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to cancel activities." };
+  if (!(await activityInScope(id, context.scope))) {
+    return { ok: false, message: "That activity could not be found." };
   }
 
   const result = await service.cancelActivity(id, reason);
@@ -205,8 +256,10 @@ export async function cancelActivityAction(
 }
 
 export async function reinstateActivityAction(id: string): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to change the programme." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to change the programme." };
+  if (!(await activityInScope(id, context.scope))) {
+    return { ok: false, message: "That activity could not be found." };
   }
 
   const result = await service.reinstateActivity(id);

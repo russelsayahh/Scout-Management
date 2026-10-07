@@ -67,6 +67,8 @@ export interface AttendanceRecord {
   id: string;
   eventKind: AttendanceEventKind;
   eventId: string;
+  /** Denormalized from the parent activity/camp at creation time - see `store.ts`. */
+  troopId: string;
   entries: AttendanceEntry[];
   /** User id of the leader who took it. Never changes once set. */
   takenBy: string;

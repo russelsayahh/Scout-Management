@@ -7,6 +7,7 @@ import { Callout } from "@/components/ui/callout";
 import { scoutAttendance } from "@/lib/attendance/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import { campsForScout } from "@/lib/camps/service";
 import { patrolNameMap } from "@/lib/patrols/service";
 import { getScout } from "@/lib/scouts/service";
@@ -32,12 +33,13 @@ export default async function ScoutDetailPage({ params, searchParams }: PageProp
 
   const { id } = await params;
   const scout = await getScout(id);
-  if (!scout) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!scout || !inScope(scope, scout.troopId)) notFound();
 
   const saved = "saved" in (await searchParams);
 
   const [names, attendance, camps] = await Promise.all([
-    patrolNameMap(),
+    patrolNameMap(scope),
     scoutAttendance(scout.id),
     campsForScout(scout.id, new Date()),
   ]);

@@ -190,6 +190,12 @@ export interface EquipmentLoan {
 
   holderKind: HolderKind;
   holderId: string;
+  /**
+   * Denormalized from the holder at checkout time - see the note in
+   * `store.ts`. The catalog item this loan points at stays shared across
+   * every troop; only the loan itself carries a troop.
+   */
+  troopId: string;
 
   checkedOutAt: string;
   /** User id of whoever booked it out. */

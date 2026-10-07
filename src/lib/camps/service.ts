@@ -1,5 +1,6 @@
 import * as userStore from "@/lib/auth/store";
 import type { Role } from "@/lib/auth/types";
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import * as store from "@/lib/camps/store";
 import { campTimeline, type CampMilestone } from "@/lib/camps/timeline";
 import {
@@ -16,6 +17,7 @@ import {
 import * as patrolStore from "@/lib/patrols/store";
 import * as scoutStore from "@/lib/scouts/store";
 import { scoutFullName, type Scout } from "@/lib/scouts/types";
+import { isTroopId } from "@/lib/troops/store";
 import type { FieldErrors } from "@/lib/validation";
 
 /**
@@ -60,11 +62,13 @@ export interface PatrolChoice {
   id: string;
   name: string;
   memberCount: number;
+  /** The troop this patrol belongs to, so the form can filter by the chosen troop. */
+  troopId: string;
 }
 
-export async function patrolChoices(): Promise<PatrolChoice[]> {
+export async function patrolChoices(scope: TroopScope): Promise<PatrolChoice[]> {
   const [patrols, counts] = await Promise.all([
-    patrolStore.allPatrols(),
+    patrolStore.patrolsInScope(scope),
     scoutStore.activeScoutCounts(),
   ]);
 
@@ -74,8 +78,25 @@ export async function patrolChoices(): Promise<PatrolChoice[]> {
       id: patrol.id,
       name: patrol.name,
       memberCount: counts.byPatrol.get(patrol.id) ?? 0,
+      troopId: patrol.troopId,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Active scouts on the register, per troop in `scope` - the head count for a
+ * whole-troop camp, keyed by troop id so the form can look up whichever troop
+ * is currently chosen.
+ */
+export async function troopSizes(scope: TroopScope): Promise<Record<string, number>> {
+  const scouts = await scoutStore.scoutsInScope(scope);
+
+  const sizes: Record<string, number> = {};
+  for (const scout of scouts) {
+    if (scout.archived || scout.status !== "active") continue;
+    sizes[scout.troopId] = (sizes[scout.troopId] ?? 0) + 1;
+  }
+  return sizes;
 }
 
 /* --------------------------------- queries -------------------------------- */
@@ -114,8 +135,12 @@ export const campFilterLabels: Record<CampFilter, string> = {
 };
 
 /** Upcoming first by start date; past newest first, which is how they are read. */
-export async function listCamps(filter: CampFilter, now: Date): Promise<CampSummary[]> {
-  const camps = await store.allCamps();
+export async function listCamps(
+  scope: TroopScope,
+  filter: CampFilter,
+  now: Date,
+): Promise<CampSummary[]> {
+  const camps = await store.campsInScope(scope);
 
   const upcoming = camps.filter((camp) => isUpcoming(camp, now));
   const past = camps.filter((camp) => !isUpcoming(camp, now));
@@ -136,8 +161,8 @@ export interface CampCounts {
   upcomingRegistrations: number;
 }
 
-export async function campCounts(now: Date): Promise<CampCounts> {
-  const camps = await store.allCamps();
+export async function campCounts(scope: TroopScope, now: Date): Promise<CampCounts> {
+  const camps = await store.campsInScope(scope);
 
   const byStatus: Record<CampStatus, number> = {
     planning: 0,
@@ -308,7 +333,7 @@ export async function registrationCandidates(id: string): Promise<RegistrationCa
   const camp = await store.findCamp(id);
   if (!camp) return { invited: [], others: [] };
 
-  const scouts = await scoutStore.allScouts();
+  const scouts = await scoutStore.scoutsInScope([camp.troopId]);
   const registered = new Set(camp.registrations.map((entry) => entry.scoutId));
 
   const available = scouts
@@ -330,8 +355,12 @@ export async function registrationCandidates(id: string): Promise<RegistrationCa
 }
 
 /** The main dashboard's list: camps still to come, soonest first. */
-export async function upcomingCamps(now: Date, limit: number): Promise<CampSummary[]> {
-  const camps = await store.allCamps();
+export async function upcomingCamps(
+  scope: TroopScope,
+  now: Date,
+  limit: number,
+): Promise<CampSummary[]> {
+  const camps = await store.campsInScope(scope);
   const upcoming = camps
     .filter((camp) => isUpcoming(camp, now) && camp.status !== "planning")
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -341,8 +370,8 @@ export async function upcomingCamps(now: Date, limit: number): Promise<CampSumma
 }
 
 /** The sidebar badge: camps still to come, drafts of the programme included. */
-export async function countUpcomingCamps(now: Date): Promise<number> {
-  const camps = await store.allCamps();
+export async function countUpcomingCamps(scope: TroopScope, now: Date): Promise<number> {
+  const camps = await store.campsInScope(scope);
   return camps.filter((camp) => isUpcoming(camp, now)).length;
 }
 
@@ -379,26 +408,40 @@ async function leadersInvalid(leaderIds: string[]): Promise<ServiceResult<never>
   return null;
 }
 
-async function patrolsInvalid(patrolIds: string[]): Promise<ServiceResult<never> | null> {
-  if (patrolIds.length === 0) return null;
+/**
+ * A camp's troop and patrols have to agree: the chosen troop must exist, and
+ * every invited patrol must belong to it. Leaders are exempt - a co-leader can
+ * help run another troop's camp.
+ */
+async function troopPatrolMismatch(details: CampDetails): Promise<ServiceResult<never> | null> {
+  if (!(await isTroopId(details.troopId))) {
+    return failure("Choose a troop for this camp.", { troopId: "That troop could not be found." });
+  }
+
+  if (details.patrolIds.length === 0) return null;
 
   const patrols = await patrolStore.allPatrols();
   const byId = new Map(patrols.map((patrol) => [patrol.id, patrol]));
 
-  for (const patrolId of patrolIds) {
+  for (const patrolId of details.patrolIds) {
     const patrol = byId.get(patrolId);
     if (!patrol) return failure("One of those patrols could not be found.");
     if (patrol.archived) return failure(`${patrol.name} Patrol is archived and cannot be invited.`);
+    if (patrol.troopId !== details.troopId) {
+      return failure("Every invited patrol must belong to the chosen troop.", {
+        patrolIds: "Choose patrols from the selected troop.",
+      });
+    }
   }
   return null;
 }
 
 export async function addCamp(details: CampDetails): Promise<ServiceResult<Camp>> {
+  const mismatch = await troopPatrolMismatch(details);
+  if (mismatch) return mismatch;
+
   const badLeaders = await leadersInvalid(details.leaderIds);
   if (badLeaders) return badLeaders;
-
-  const badPatrols = await patrolsInvalid(details.patrolIds);
-  if (badPatrols) return badPatrols;
 
   return { ok: true, data: await store.createCamp(details) };
 }
@@ -413,11 +456,11 @@ export async function editCamp(
     return failure("This camp is finished, so its details are a fixed record.");
   }
 
+  const mismatch = await troopPatrolMismatch(details);
+  if (mismatch) return mismatch;
+
   const badLeaders = await leadersInvalid(details.leaderIds);
   if (badLeaders) return badLeaders;
-
-  const badPatrols = await patrolsInvalid(details.patrolIds);
-  if (badPatrols) return badPatrols;
 
   // Shrinking below the number already signed up would leave a roster that
   // cannot be explained, so it is refused rather than silently allowed.
@@ -455,6 +498,9 @@ export async function registerScouts(
     const scout = byId.get(scoutId);
     if (!scout) return failure("One of those scouts could not be found.");
     if (scout.archived) return failure(`${scoutFullName(scout)} is archived.`);
+    if (scout.troopId !== camp.troopId) {
+      return failure(`${scoutFullName(scout)} belongs to a different troop.`);
+    }
   }
 
   const result = await store.addRegistrations(id, scoutIds, registeredBy);

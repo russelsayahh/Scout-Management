@@ -19,6 +19,7 @@ import { recentActivitiesForPatrol } from "@/lib/activities/service";
 import { patrolAttendance } from "@/lib/attendance/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import { formatLongDate } from "@/lib/format";
 import { assignableScouts, getPatrol } from "@/lib/patrols/service";
 import { patrolStatusDescriptions, patrolStatusLabels } from "@/lib/patrols/types";
@@ -46,13 +47,14 @@ export default async function PatrolDetailPage({ params, searchParams }: PagePro
 
   const { id } = await params;
   const found = await getPatrol(id);
-  if (!found) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!found || !inScope(scope, found.patrol.troopId)) notFound();
 
   const { patrol, members, memberCount, leader } = found;
   const saved = "saved" in (await searchParams);
 
   // Only fetched when it can be used - the picker is hidden otherwise.
-  const candidates = canManage && !patrol.archived ? await assignableScouts() : [];
+  const candidates = canManage && !patrol.archived ? await assignableScouts(patrol.troopId) : [];
 
   // Real programme history: completed activities this patrol was part of.
   const [recent, attendance] = await Promise.all([

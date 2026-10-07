@@ -94,9 +94,15 @@ export interface Camp {
   /** ISO day. Never after `startDate`. */
   registrationDeadline: string;
 
-  /** User accounts of the leaders responsible. At least one. */
+  /** The troop this camp belongs to. Every camp has exactly one. */
+  troopId: string;
+  /**
+   * User accounts of the leaders responsible. At least one. Not required to
+   * belong to `troopId` themselves - a co-leader can help run another troop's
+   * camp.
+   */
   leaderIds: string[];
-  /** Patrols invited. Empty means the whole troop is invited. */
+  /** Patrols invited. Empty means the whole troop is invited. Always patrols of `troopId`. */
   patrolIds: string[];
 
   /** Places available. Required - a camp always has a physical limit. */
@@ -132,6 +138,7 @@ export type CampDetails = Pick<
   | "startDate"
   | "endDate"
   | "registrationDeadline"
+  | "troopId"
   | "leaderIds"
   | "patrolIds"
   | "maxParticipants"

@@ -22,28 +22,36 @@ import {
   validatePatrolDescription,
   validatePatrolName,
 } from "@/lib/patrols/validation";
+import type { Troop } from "@/lib/troops/types";
 
 /**
  * The create and edit form.
  *
  * The patrol leader is not set here - a leader has to be one of the patrol's
  * own members, so the appointment lives on the patrol page next to the member
- * list where that choice makes sense.
+ * list where that choice makes sense. The troop is only chosen on create -
+ * moving an existing patrol between troops would strand its members, so
+ * `patrols/store.ts` never accepts a change to it after the fact.
  */
-type PatrolFormProps =
+type PatrolFormProps = (
   | { mode: "create"; patrol?: undefined }
-  | { mode: "edit"; patrol: Patrol };
+  | { mode: "edit"; patrol: Patrol }
+) & {
+  /** For create, the troops the caller may place a new patrol in. For edit, just its own troop, for display. */
+  troops: Troop[];
+};
 
-export function PatrolForm({ mode, patrol }: PatrolFormProps) {
+export function PatrolForm({ mode, patrol, troops }: PatrolFormProps) {
   const action = mode === "create" ? createPatrolAction : updatePatrolAction;
   const [state, formAction, pending] = useActionState(action, initialFormState);
   const { errors, setFieldError, clearField } = useFieldErrors(state);
 
+  const initial = (field: string, fallback: string) => state.values?.[field] ?? fallback;
+
   const [status, setStatus] = useState<PatrolStatus>(
     (state.values?.status as PatrolStatus) ?? patrol?.status ?? "forming",
   );
-
-  const initial = (field: string, fallback: string) => state.values?.[field] ?? fallback;
+  const [troopId, setTroopId] = useState(initial("troopId", troops?.[0]?.id ?? ""));
 
   const formError =
     state.status === "error" && Object.keys(errors).length === 0 ? state.message : undefined;
@@ -68,6 +76,34 @@ export function PatrolForm({ mode, patrol }: PatrolFormProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {mode === "create" ? (
+            <SelectField
+              label="Troop"
+              name="troopId"
+              value={troopId}
+              onChange={(event) => {
+                setTroopId(event.target.value);
+                clearField("troopId");
+              }}
+              error={errors.troopId}
+              hint="Which section this patrol belongs to. Cannot be changed later."
+              disabled={pending}
+            >
+              {troops.map((troop) => (
+                <option key={troop.id} value={troop.id}>
+                  {troop.name}
+                </option>
+              ))}
+            </SelectField>
+          ) : (
+            <div className="rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-[13px] text-ink-secondary">
+              Troop:{" "}
+              <span className="font-medium text-ink">
+                {troops.find((troop) => troop.id === patrol.troopId)?.name ?? patrol.troopId}
+              </span>
+            </div>
+          )}
+
           <TextField
             label="Patrol name"
             name="name"

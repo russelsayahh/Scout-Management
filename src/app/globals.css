@@ -30,21 +30,21 @@
   --ink-muted: #838d87;
   --ink-inverse: #ffffff;
 
-  /* Brand - forest green */
-  --brand-50: #eef7f1;
-  --brand-100: #d6ecdf;
-  --brand-200: #aed9c0;
-  --brand-300: #7dc09b;
-  --brand-400: #4aa176;
-  --brand-500: #2b8459;
-  --brand-600: #1e6a47;
-  --brand-700: #19553a;
-  --brand-800: #154431;
-  --brand-900: #12382a;
+  /* Brand - crest blue, sampled from the group's fleur-de-lis badge */
+  --brand-50: #ecf3fd;
+  --brand-100: #d1e2fa;
+  --brand-200: #a2c4f6;
+  --brand-300: #6ba1f0;
+  --brand-400: #337eeb;
+  --brand-500: #1564d5;
+  --brand-600: #114ea7;
+  --brand-700: #0d3d82;
+  --brand-800: #092b5d;
+  --brand-900: #061e41;
 
   --brand-solid: var(--brand-600);
   --brand-solid-hover: var(--brand-700);
-  --brand-text: #1a5f40;
+  --brand-text: #1550a6;
   --brand-soft: var(--brand-50);
   --brand-soft-hover: var(--brand-100);
   --brand-border: var(--brand-200);
@@ -86,10 +86,10 @@
 
   --brand-solid: var(--brand-500);
   --brand-solid-hover: var(--brand-400);
-  --brand-text: #6ab98f;
-  --brand-soft: #16241d;
-  --brand-soft-hover: #1b2e24;
-  --brand-border: #22402f;
+  --brand-text: #6ba1f0;
+  --brand-soft: #101f33;
+  --brand-soft-hover: #16294a;
+  --brand-border: #1f3a5e;
 
   /* Dark steps of the same ramps, selected for the dark surface. */
   --viz-accent: #3987e5;

@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { LoginForm } from "@/components/auth/login-form";
+import { siteConfig } from "@/config/site";
 import { requireGuest } from "@/lib/auth/current-user";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to the Trailhead scout management platform.",
+  description: `Sign in to the ${siteConfig.name} scout management platform.`,
 };
 
 export default async function LoginPage() {

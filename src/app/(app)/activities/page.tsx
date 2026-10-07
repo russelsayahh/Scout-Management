@@ -24,6 +24,7 @@ import {
 } from "@/lib/activities/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 
 export const metadata: Metadata = {
   title: "Activities",
@@ -41,6 +42,7 @@ export default async function ActivitiesPage({
   }
 
   const canManage = can(user.role, "activities.manage");
+  const scope = await resolveTroopScope(user);
 
   // One reference instant for the whole request, so nothing on the page can
   // disagree about where the line between upcoming and past falls.
@@ -49,8 +51,8 @@ export default async function ActivitiesPage({
   const query = parseActivityQuery(await searchParams);
   const [context, patrols, counts] = await Promise.all([
     activityContext(now),
-    patrolChoices(),
-    activityCounts(now),
+    patrolChoices(scope),
+    activityCounts(scope, now),
   ]);
 
   const calendarView = query.view === "calendar";
@@ -59,12 +61,12 @@ export default async function ActivitiesPage({
   const month = calendarView
     ? buildCalendarMonth(
         resolveMonth(query.month, now),
-        await activitiesForCalendar(query, context, canManage),
+        await activitiesForCalendar(scope, query, context, canManage),
         now,
       )
     : null;
 
-  const page = calendarView ? null : await listActivities(query, context, canManage);
+  const page = calendarView ? null : await listActivities(scope, query, context, canManage);
   const expected = page ? await expectedAttendance(page.items) : {};
 
   const from = page ? (page.page - 1) * page.pageSize + 1 : 0;

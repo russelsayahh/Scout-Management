@@ -17,6 +17,7 @@ import { DetailList, EmptyValue } from "@/components/ui/detail-list";
 import { Meter } from "@/components/ui/meter";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { checkoutTargets, getItem, type LoanRow } from "@/lib/equipment/service";
 import {
   availabilityDescriptions,
@@ -33,7 +34,9 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const found = await getItem(id, new Date());
+  // Only the item's own name is needed for the title, and the catalog is
+  // shared, so nothing here depends on who is asking.
+  const found = await getItem("all", id, new Date());
 
   return { title: found ? found.item.name : "Equipment not found" };
 }
@@ -54,10 +57,11 @@ export default async function EquipmentDetailPage({ params, searchParams }: Page
   }
 
   const canManage = can(user.role, "equipment.manage");
+  const scope = await resolveTroopScope(user);
 
   const { id } = await params;
   const now = new Date();
-  const found = await getItem(id, now);
+  const found = await getItem(scope, id, now);
   if (!found) notFound();
 
   const { item, position, totalOwned, out, history, block, blockMessage } = found;

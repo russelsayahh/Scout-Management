@@ -8,10 +8,12 @@ import {
   getActivity,
   leaderOptions,
   patrolChoices,
-  troopSize,
+  troopSizes,
 } from "@/lib/activities/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
+import { troopsInScope } from "@/lib/troops/service";
 
 export const metadata: Metadata = {
   title: "New activity",
@@ -35,17 +37,22 @@ export default async function NewActivityPage({
     return <AccessDenied sectionName="creating activities" role={user.role} />;
   }
 
+  const scope = await resolveTroopScope(user);
+
   const params = await searchParams;
   const from = typeof params.from === "string" ? params.from : "";
 
-  const [patrols, leaders, troop] = await Promise.all([
-    patrolChoices(),
+  const [patrols, leaders, sizes, troops] = await Promise.all([
+    patrolChoices(scope),
     leaderOptions(),
-    troopSize(),
+    troopSizes(scope),
+    troopsInScope(scope),
   ]);
 
   const source = from ? await getActivity(from, new Date()) : null;
-  if (from && !source) notFound();
+  // Duplicating from a record outside the caller's scope is refused the same
+  // way visiting it directly would be - never confirming it exists.
+  if (from && (!source || !inScope(scope, source.activity.troopId))) notFound();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -65,14 +72,16 @@ export default async function NewActivityPage({
           activity={source.activity}
           patrols={patrols}
           leaders={leaders}
-          troopSize={troop}
+          troops={troops}
+          troopSizes={sizes}
         />
       ) : (
         <ActivityForm
           mode="create"
           patrols={patrols}
           leaders={leaders}
-          troopSize={troop}
+          troops={troops}
+          troopSizes={sizes}
         />
       )}
     </div>

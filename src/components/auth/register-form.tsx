@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import { ArrowRight, Lock, Mail, Phone, ShieldCheck, User, Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
-import { PasswordField, SelectField, TextField } from "@/components/ui/form-field";
+import { AuthPasswordField, AuthSelectField, AuthTextField } from "@/components/auth/auth-field";
 import { Spinner } from "@/components/ui/spinner";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { registerAction } from "@/lib/auth/actions";
+import { siteConfig } from "@/config/site";
 import { initialFormState } from "@/lib/form-state";
 import { SELF_SIGNUP_ROLES, roleDescriptions, roleLabels } from "@/lib/auth/types";
 import {
@@ -17,17 +17,19 @@ import {
   validatePassword,
   validatePhone,
 } from "@/lib/auth/validation";
+import type { Troop } from "@/lib/troops/types";
 
 /** The roles a person may pick for themselves; administrator is granted, not chosen. */
 type SelfSignupRole = (typeof SELF_SIGNUP_ROLES)[number];
 
-export function RegisterForm() {
+export function RegisterForm({ troops }: { troops: Troop[] }) {
   const [state, formAction, pending] = useActionState(registerAction, initialFormState);
   const { errors, setFieldError, clearField } = useFieldErrors(state);
 
   const [role, setRole] = useState<SelfSignupRole>(
     (state.values?.role as SelfSignupRole) ?? "assistant-leader",
   );
+  const [troopId, setTroopId] = useState(state.values?.troopId ?? troops[0]?.id ?? "");
 
   const showFormError =
     state.status === "error" && state.message && Object.keys(errors).length === 0;
@@ -35,24 +37,28 @@ export function RegisterForm() {
   return (
     <div>
       <header className="mb-7">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Create your account</h1>
-        <p className="mt-1.5 text-sm text-ink-secondary">
-          Join your group on Trailhead. It takes a minute.
+        <h1 className="text-[28px] font-bold tracking-tight text-white">Create your account</h1>
+        <p className="mt-1.5 text-sm text-white/65">
+          Join your group on {siteConfig.name}. It takes a minute.
         </p>
       </header>
 
       {showFormError && (
-        <Callout tone="error" className="mb-5">
+        <div
+          role="alert"
+          className="mb-5 rounded-lg border border-red-400/30 bg-red-500/10 px-3.5 py-3 text-[13px] text-red-100"
+        >
           {state.message}
-        </Callout>
+        </div>
       )}
 
       <form action={formAction} noValidate className="space-y-4">
-        <TextField
+        <AuthTextField
           label="Full name"
+          icon={User}
           name="name"
           autoComplete="name"
-          placeholder="Alex Fielding"
+          placeholder="Enter your full name"
           defaultValue={state.values?.name}
           onChange={() => clearField("name")}
           onBlur={(event) => setFieldError("name", validateName(event.target.value))}
@@ -60,12 +66,13 @@ export function RegisterForm() {
           disabled={pending}
         />
 
-        <TextField
-          label="Email address"
+        <AuthTextField
+          label="Email"
+          icon={Mail}
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="you@1striverside.org"
+          placeholder="Enter your email"
           defaultValue={state.values?.email}
           onChange={() => clearField("email")}
           onBlur={(event) => setFieldError("email", validateEmail(event.target.value))}
@@ -73,13 +80,13 @@ export function RegisterForm() {
           disabled={pending}
         />
 
-        <TextField
-          label="Phone number"
-          labelAside="Optional"
+        <AuthTextField
+          label="Phone number (optional)"
+          icon={Phone}
           name="phone"
           type="tel"
           autoComplete="tel"
-          placeholder="+44 7700 900000"
+          placeholder="Enter your phone number"
           defaultValue={state.values?.phone}
           onChange={() => clearField("phone")}
           onBlur={(event) => setFieldError("phone", validatePhone(event.target.value))}
@@ -89,8 +96,9 @@ export function RegisterForm() {
 
         {/* The option list stays short; the chosen role is explained underneath,
             where the text has room to be read. */}
-        <SelectField
+        <AuthSelectField
           label="Role"
+          icon={ShieldCheck}
           name="role"
           value={role}
           onChange={(event) => {
@@ -106,10 +114,31 @@ export function RegisterForm() {
               {roleLabels[option]}
             </option>
           ))}
-        </SelectField>
+        </AuthSelectField>
 
-        <PasswordField
+        <AuthSelectField
+          label="Troop"
+          icon={Users}
+          name="troopId"
+          value={troopId}
+          onChange={(event) => {
+            setTroopId(event.target.value);
+            clearField("troopId");
+          }}
+          error={errors.troopId}
+          hint="Which section you're the leader for. You'll only see this troop's information once signed in - an administrator can add more later."
+          disabled={pending}
+        >
+          {troops.map((troop) => (
+            <option key={troop.id} value={troop.id}>
+              {troop.name}
+            </option>
+          ))}
+        </AuthSelectField>
+
+        <AuthPasswordField
           label="Password"
+          icon={Lock}
           name="password"
           autoComplete="new-password"
           placeholder="At least 10 characters"
@@ -120,8 +149,9 @@ export function RegisterForm() {
           disabled={pending}
         />
 
-        <PasswordField
+        <AuthPasswordField
           label="Confirm password"
+          icon={Lock}
           name="confirmPassword"
           autoComplete="new-password"
           placeholder="Re-enter your password"
@@ -130,20 +160,25 @@ export function RegisterForm() {
           disabled={pending}
         />
 
-        <Button type="submit" size="lg" className="w-full" disabled={pending}>
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-500 text-[14px] font-semibold text-white transition-colors hover:bg-brand-400 disabled:pointer-events-none disabled:opacity-60"
+        >
           {pending && <Spinner label="Creating account" />}
           {pending ? "Creating account..." : "Create account"}
-        </Button>
+          {!pending && <ArrowRight className="size-4" strokeWidth={2.2} aria-hidden />}
+        </button>
       </form>
 
-      <p className="mt-5 text-center text-[13px] text-ink-secondary">
+      <p className="mt-5 text-center text-[13px] text-white/65">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-brand-text hover:underline">
+        <Link href="/login" className="font-medium text-white hover:underline">
           Sign in
         </Link>
       </p>
 
-      <p className="mt-6 text-center text-[11.5px] text-ink-muted">
+      <p className="mt-6 text-center text-[11.5px] text-white/45">
         Administrator access is granted by an existing administrator, not chosen here.
       </p>
     </div>

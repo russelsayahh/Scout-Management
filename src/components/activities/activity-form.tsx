@@ -6,7 +6,7 @@ import { Send, TriangleAlert, Users } from "lucide-react";
 
 import { ActivityStatusBadge } from "@/components/activities/activity-status-badge";
 
-import { PatrolPicker, type PatrolChoice } from "@/components/shared/patrol-picker";
+import { PatrolPicker, type PatrolChoice as PickerPatrolChoice } from "@/components/shared/patrol-picker";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/activities/validation";
 import { roleLabels, type Role } from "@/lib/auth/types";
 import { initialFormState } from "@/lib/form-state";
+import type { Troop } from "@/lib/troops/types";
 import { cn } from "@/lib/utils";
 import { validateTime } from "@/lib/validation";
 
@@ -49,11 +50,19 @@ export interface LeaderChoice {
   role: Role;
 }
 
+/** A patrol choice with its troop, so the form can filter by the chosen troop. */
+interface PatrolChoice extends PickerPatrolChoice {
+  troopId: string;
+}
+
 type ActivityFormProps = {
+  /** Patrols the caller may pick from - already scoped to their troop(s). */
   patrols: PatrolChoice[];
   leaders: LeaderChoice[];
-  /** Active scouts on the register, for the whole-troop head count. */
-  troopSize: number;
+  /** Troops the caller may place this activity in - a leader sees only their own. */
+  troops: Troop[];
+  /** Active scouts on the register, per troop id, for the whole-troop head count. */
+  troopSizes: Record<string, number>;
 } & (
   | { mode: "create"; activity?: undefined }
   | { mode: "duplicate"; activity: Activity }
@@ -71,7 +80,8 @@ export function ActivityForm({
   activity,
   patrols,
   leaders,
-  troopSize,
+  troops,
+  troopSizes,
 }: ActivityFormProps) {
   const isEdit = mode === "edit";
   const action = isEdit ? updateActivityAction : createActivityAction;
@@ -88,15 +98,23 @@ export function ActivityForm({
   const [capacity, setCapacity] = useState(
     initial("capacity", activity?.capacity != null ? String(activity.capacity) : ""),
   );
+  const [troopId, setTroopId] = useState(
+    initial("troopId", activity?.troopId ?? troops[0]?.id ?? ""),
+  );
   const [selectedPatrols, setSelectedPatrols] = useState<string[]>(
     parsePatrolIds(state.values?.patrolIds) ?? activity?.patrolIds ?? [],
   );
 
+  // An activity's patrols have to belong to its troop, so switching the troop
+  // clears any patrol that no longer applies.
+  const patrolsInTroop = patrols.filter((patrol) => patrol.troopId === troopId);
+  const troopLocked = troops.length <= 1;
+
   // The head count is real: it comes from the register, not from sign-ups.
   const expected =
     selectedPatrols.length === 0
-      ? troopSize
-      : patrols
+      ? (troopSizes[troopId] ?? 0)
+      : patrolsInTroop
           .filter((patrol) => selectedPatrols.includes(patrol.id))
           .reduce((sum, patrol) => sum + patrol.memberCount, 0);
 
@@ -286,8 +304,38 @@ export function ActivityForm({
             ))}
           </SelectField>
 
+          <div>
+            {troopLocked && <input type="hidden" name="troopId" value={troopId} />}
+            <SelectField
+              label="Troop"
+              // A disabled select submits nothing, so the locked case is
+              // carried by the hidden input above instead.
+              name={troopLocked ? undefined : "troopId"}
+              value={troopId}
+              onChange={(event) => {
+                setTroopId(event.target.value);
+                clearField("troopId");
+                // Patrols from the previous troop no longer apply.
+                setSelectedPatrols((current) =>
+                  current.filter((id) =>
+                    patrols.some((patrol) => patrol.id === id && patrol.troopId === event.target.value),
+                  ),
+                );
+              }}
+              error={errors.troopId}
+              hint={troopLocked ? "Set by your own troop assignment." : "Which section this activity is for."}
+              disabled={pending || troopLocked}
+            >
+              {troops.map((troop) => (
+                <option key={troop.id} value={troop.id}>
+                  {troop.name}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+
           <PatrolPicker
-            patrols={patrols}
+            patrols={patrolsInTroop}
             selected={selectedPatrols}
             onChange={setSelectedPatrols}
             disabled={pending}

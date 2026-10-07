@@ -94,9 +94,14 @@ export interface Activity {
   /** User account of the leader responsible for running it. */
   leaderId: string;
 
+  /** The troop this activity belongs to. Every activity has exactly one. */
+  troopId: string;
+
   /**
    * Patrols taking part. An empty list means the whole troop is invited -
    * which is the common case, so it is the default rather than a special flag.
+   * Always patrols of `troopId` - `activities/service.ts` enforces that on
+   * every write.
    */
   patrolIds: string[];
 

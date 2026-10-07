@@ -27,6 +27,7 @@ import {
 } from "@/lib/activities/types";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import { formatDayLabel, formatLongDate } from "@/lib/format";
 
 interface PageProps {
@@ -52,7 +53,8 @@ export default async function ActivityDetailPage({ params, searchParams }: PageP
   const { id } = await params;
   const now = new Date();
   const found = await getActivity(id, now);
-  if (!found) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!found || !inScope(scope, found.activity.troopId)) notFound();
 
   const { activity, leaderName, audience, awaitingCompletion } = found;
 

@@ -96,19 +96,6 @@ export interface ActivityEntry {
   timeAgo: string;
 }
 
-/* -------------------------------- Notifications -------------------------------- */
-
-export type NotificationTone = "info" | "good" | "warning" | "critical";
-
-export interface Notification {
-  id: string;
-  title: string;
-  body: string;
-  timeAgo: string;
-  tone: NotificationTone;
-  unread: boolean;
-}
-
 /* ------------------------------------- User ------------------------------------ */
 
 export interface UserProfile {
@@ -117,15 +104,4 @@ export interface UserProfile {
   role: string;
   email: string;
   group: string;
-}
-
-/* ------------------------------------ Search ----------------------------------- */
-
-export interface SearchResult {
-  id: string;
-  title: string;
-  subtitle: string;
-  group: "Scouts" | "Leaders" | "Patrols" | "Camps" | "Documents";
-  href: string;
-  icon: LucideIcon;
 }

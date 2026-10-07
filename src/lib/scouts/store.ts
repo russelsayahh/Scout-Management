@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
+import type { TroopScope } from "@/lib/auth/troop-scope";
+import { inScope } from "@/lib/auth/troop-scope";
 import { createJsonStore } from "@/lib/json-store";
+import { PATROL_TROOP_BY_SLUG, patrolTroopName } from "@/lib/patrols/store";
 import { patrolSlug } from "@/lib/patrols/types";
 import { buildSeedScouts } from "@/lib/scouts/seed-data";
 import type { Scout, ScoutDetails } from "@/lib/scouts/types";
@@ -14,21 +17,32 @@ import type { Scout, ScoutDetails } from "@/lib/scouts/types";
 const SEEDED_AT = "2026-08-01T09:00:00.000Z";
 
 /**
- * Records written before patrols became real carried a `patrol` name string.
- * Map those onto the seeded patrol ids so an existing `.data` folder keeps
- * working; the file is rewritten in the new shape on its next update.
+ * Records written before patrols became real carried a `patrol` name string;
+ * records written before troops existed carry no `troopId` at all. Both are
+ * brought up to date on read, so an existing `.data` folder keeps working and
+ * is rewritten in the current shape on its next write.
  */
 type LegacyScout = Scout & { patrol?: string };
 
 function migrateScout(record: Scout): Scout {
   const legacy = record as LegacyScout;
-  if (legacy.patrolId !== undefined || legacy.patrol === undefined) return record;
 
-  const { patrol, ...rest } = legacy;
-  return {
-    ...rest,
-    patrolId: patrol === "Unassigned" || !patrol ? null : patrolSlug(patrol),
-  };
+  let next: Scout = record;
+  if (legacy.patrolId === undefined && legacy.patrol !== undefined) {
+    const { patrol, ...rest } = legacy;
+    next = {
+      ...rest,
+      patrolId: patrol === "Unassigned" || !patrol ? null : patrolSlug(patrol),
+    };
+  }
+
+  if (next.troopId !== undefined) return next;
+
+  const troopId = next.patrolId
+    ? (PATROL_TROOP_BY_SLUG[next.patrolId] ?? patrolTroopName(""))
+    : patrolTroopName("");
+
+  return { ...next, troopId };
 }
 
 const store = createJsonStore<Scout>(
@@ -41,11 +55,17 @@ const store = createJsonStore<Scout>(
       createdAt: SEEDED_AT,
       updatedAt: SEEDED_AT,
     })),
-  { migrate: migrateScout },
+  { migrate: migrateScout, autoSeed: false },
 );
 
 export async function allScouts(): Promise<Scout[]> {
   return store.all();
+}
+
+/** Scouts visible under `scope` - every scout for an admin, or just the caller's troop(s) otherwise. */
+export async function scoutsInScope(scope: TroopScope): Promise<Scout[]> {
+  const scouts = await store.all();
+  return scouts.filter((scout) => inScope(scope, scout.troopId));
 }
 
 export async function findScout(id: string): Promise<Scout | null> {
@@ -108,10 +128,12 @@ export async function scoutsInPatrol(patrolId: string): Promise<Scout[]> {
   return scouts.filter((scout) => !scout.archived && scout.patrolId === patrolId);
 }
 
-/** Non-archived scouts not currently in any patrol. */
-export async function unassignedScouts(): Promise<Scout[]> {
+/** Non-archived, patrol-less scouts in `troopId`. */
+export async function unassignedScouts(troopId: string): Promise<Scout[]> {
   const scouts = await store.all();
-  return scouts.filter((scout) => !scout.archived && scout.patrolId === null);
+  return scouts.filter(
+    (scout) => !scout.archived && scout.patrolId === null && scout.troopId === troopId,
+  );
 }
 
 /** Member counts per patrol id, for the list page and the nav badge. */

@@ -50,8 +50,11 @@ export interface Scout {
 
   // Membership
   joinDate: string; // ISO day
+  /** The troop this scout belongs to. Every scout has exactly one. */
+  troopId: string;
   /**
-   * The patrol this scout belongs to, or null when unassigned.
+   * The patrol this scout belongs to, or null when unassigned. Always a
+   * patrol of `troopId` - `scouts/service.ts` enforces that on every write.
    *
    * A single field rather than a list: a scout is in at most one patrol, and
    * making that structural means no rule has to police it.

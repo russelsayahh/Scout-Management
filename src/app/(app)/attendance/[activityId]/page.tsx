@@ -17,6 +17,7 @@ import { formatTimeRange } from "@/lib/activities/types";
 import { availabilityMessages, getRegister } from "@/lib/attendance/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import { formatDayLabel, formatLongDate } from "@/lib/format";
 import { scoutFullName } from "@/lib/scouts/types";
 
@@ -43,7 +44,8 @@ export default async function RegisterPage({ params }: PageProps) {
 
   const { activityId } = await params;
   const register = await getRegister(activityId, new Date());
-  if (!register) notFound();
+  const scope = await resolveTroopScope(user);
+  if (!register || !inScope(scope, register.activity.troopId)) notFound();
 
   const { activity, groups, total, record, takenByName, availability } = register;
 

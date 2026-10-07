@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope, type TroopScope } from "@/lib/auth/troop-scope";
 import type { FormState } from "@/lib/form-state";
 import * as service from "@/lib/leaders/service";
 import { validateLeaderInput, type LeaderFormInput } from "@/lib/leaders/validation";
@@ -34,6 +35,7 @@ function readLeaderForm(formData: FormData): LeaderFormInput {
     // Absent means "unchanged"; empty string means "no picture".
     avatar: typeof avatar === "string" ? (avatar.length > 0 ? avatar : null) : null,
     patrolIds: formData.getAll("patrolIds").filter((value): value is string => typeof value === "string"),
+    troopIds: formData.getAll("troopIds").filter((value): value is string => typeof value === "string"),
   };
 }
 
@@ -45,6 +47,7 @@ function echo(input: LeaderFormInput): Record<string, string> {
     phone: input.phone,
     position: input.position,
     patrolIds: input.patrolIds.join(","),
+    troopIds: input.troopIds.join(","),
   };
 }
 
@@ -62,26 +65,31 @@ const FORBIDDEN: FormState = {
   message: "You do not have permission to change leader records.",
 };
 
-async function canManage(): Promise<boolean> {
+/** Loads the caller's troop scope, or null if they may not manage leaders at all. */
+async function manageScope(): Promise<TroopScope | null> {
   const user = await getCurrentUser();
-  return Boolean(user && can(user.role, "leaders.manage"));
+  if (!user || !can(user.role, "leaders.manage")) return null;
+  return resolveTroopScope(user);
 }
 
 export async function updateLeaderAction(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (!(await canManage())) return FORBIDDEN;
+  const scope = await manageScope();
+  if (!scope) return FORBIDDEN;
 
   const id = field(formData, "id");
   if (!id) return { status: "error", message: "That leader could not be found." };
 
-  const input = readLeaderForm(formData);
-
   // On edit the avatar field is only submitted when it changed, so an absent
   // field must keep whatever is on the record.
   const existing = await service.getLeader(id);
-  if (!existing) return { status: "error", message: "That leader could not be found." };
+  if (!existing || !service.leaderInScope(existing, scope)) {
+    return { status: "error", message: "That leader could not be found." };
+  }
+
+  const input = readLeaderForm(formData);
 
   const avatarSubmitted = formData.get("avatar") !== null;
   const merged: LeaderFormInput = {
@@ -92,6 +100,14 @@ export async function updateLeaderAction(
   const fieldErrors = validateLeaderInput(merged);
   if (hasErrors(fieldErrors)) return invalid(fieldErrors, merged);
 
+  // Whatever troops the form submitted, only ones the caller can actually
+  // access are honoured - this is what stops a leader assigning someone
+  // (including themselves) to a troop outside their own.
+  const outOfScope = merged.troopIds.some((troopId) => !inScope(scope, troopId));
+  if (outOfScope) {
+    return invalid({ troopIds: "Choose only troops you have access to." }, merged);
+  }
+
   const result = await service.updateLeaderProfile(id, {
     name: merged.name.trim(),
     email: merged.email.trim().toLowerCase(),
@@ -99,6 +115,7 @@ export async function updateLeaderAction(
     position: merged.position.trim(),
     avatar: merged.avatar,
     patrolIds: merged.patrolIds,
+    troopIds: merged.troopIds,
   });
 
   if (!result.ok) {

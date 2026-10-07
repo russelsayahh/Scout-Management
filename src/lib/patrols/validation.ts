@@ -16,6 +16,7 @@ export interface PatrolFormInput {
   description: string;
   status: string;
   patrolLeaderId: string;
+  troopId: string;
 }
 
 export function validatePatrolInput(input: PatrolFormInput): FieldErrors {

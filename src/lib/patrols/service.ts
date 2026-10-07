@@ -1,8 +1,10 @@
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import * as userStore from "@/lib/auth/store";
 import * as patrolStore from "@/lib/patrols/store";
 import type { Patrol, PatrolDetails } from "@/lib/patrols/types";
 import * as scoutStore from "@/lib/scouts/store";
 import { scoutFullName, type Scout } from "@/lib/scouts/types";
+import { isTroopId } from "@/lib/troops/store";
 import type { FieldErrors } from "@/lib/validation";
 
 /**
@@ -40,9 +42,12 @@ export interface PatrolSummary {
   leaderName: string | null;
 }
 
-export async function listPatrols(includeArchived: boolean): Promise<PatrolSummary[]> {
+export async function listPatrols(
+  scope: TroopScope,
+  includeArchived: boolean,
+): Promise<PatrolSummary[]> {
   const [patrols, counts] = await Promise.all([
-    patrolStore.allPatrols(),
+    patrolStore.patrolsInScope(scope),
     scoutStore.memberCounts(),
   ]);
 
@@ -83,28 +88,30 @@ export async function getPatrol(id: string): Promise<PatrolWithMembers | null> {
 }
 
 /** Id to name, for the scout list's patrol column and filter. */
-export async function patrolNameMap(): Promise<Map<string, string>> {
-  const patrols = await patrolStore.allPatrols();
+export async function patrolNameMap(scope: TroopScope): Promise<Map<string, string>> {
+  const patrols = await patrolStore.patrolsInScope(scope);
   return new Map(patrols.map((patrol) => [patrol.id, patrol.name]));
 }
 
-/** Options for a patrol picker: active patrols, plus any the caller must keep. */
-export async function patrolOptions(): Promise<{ id: string; name: string }[]> {
-  const patrols = await patrolStore.allPatrols();
+/** Options for a patrol picker: active patrols in scope, grouped by nothing but troop-filtered. */
+export async function patrolOptions(
+  scope: TroopScope,
+): Promise<{ id: string; name: string; troopId: string }[]> {
+  const patrols = await patrolStore.patrolsInScope(scope);
   return patrols
     .filter((patrol) => !patrol.archived)
-    .map((patrol) => ({ id: patrol.id, name: patrol.name }))
+    .map((patrol) => ({ id: patrol.id, name: patrol.name, troopId: patrol.troopId }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function countActivePatrols(): Promise<number> {
-  const patrols = await patrolStore.allPatrols();
+export async function countActivePatrols(scope: TroopScope): Promise<number> {
+  const patrols = await patrolStore.patrolsInScope(scope);
   return patrols.filter((patrol) => !patrol.archived).length;
 }
 
-/** Scouts with no patrol, offered when assigning members. */
-export async function assignableScouts(): Promise<Scout[]> {
-  const scouts = await scoutStore.unassignedScouts();
+/** Scouts in `troopId` with no patrol, offered when assigning members to one of its patrols. */
+export async function assignableScouts(troopId: string): Promise<Scout[]> {
+  const scouts = await scoutStore.unassignedScouts(troopId);
   return scouts.sort((a, b) => scoutFullName(a).localeCompare(scoutFullName(b)));
 }
 
@@ -120,7 +127,15 @@ async function nameConflict(
   });
 }
 
+async function invalidTroop(troopId: string): Promise<ServiceResult<never> | null> {
+  if (await isTroopId(troopId)) return null;
+  return failure("Choose a troop for this patrol.", { troopId: "That troop could not be found." });
+}
+
 export async function addPatrol(details: PatrolDetails): Promise<ServiceResult<Patrol>> {
+  const troopError = await invalidTroop(details.troopId);
+  if (troopError) return troopError;
+
   const conflict = await nameConflict(details.name);
   if (conflict) return conflict;
 
@@ -130,7 +145,7 @@ export async function addPatrol(details: PatrolDetails): Promise<ServiceResult<P
 
 export async function editPatrol(
   id: string,
-  details: PatrolDetails,
+  details: Omit<PatrolDetails, "troopId">,
 ): Promise<ServiceResult<Patrol>> {
   const conflict = await nameConflict(details.name, id);
   if (conflict) return conflict;
@@ -212,6 +227,9 @@ export async function assignScoutsToPatrol(
     const scout = await scoutStore.findScout(scoutId);
     if (!scout) return failure("One of those scouts could not be found.");
     if (scout.archived) return failure(`${scoutFullName(scout)} is archived.`);
+    if (scout.troopId !== patrol.troopId) {
+      return failure(`${scoutFullName(scout)} belongs to a different troop.`);
+    }
     if (scout.patrolId && scout.patrolId !== patrolId) moved.push(scoutFullName(scout));
   }
 

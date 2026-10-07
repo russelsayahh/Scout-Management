@@ -2,8 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import type { Activity, ActivityDetails, ActivityStatus, ActivityType } from "@/lib/activities/types";
 import * as userStore from "@/lib/auth/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
 import { createJsonStore } from "@/lib/json-store";
+import { PATROL_TROOP_BY_SLUG, patrolTroopName } from "@/lib/patrols/store";
 import { patrolSlug } from "@/lib/patrols/types";
+import { troopSlug } from "@/lib/troops/types";
 
 /**
  * Activity repository - the only module that knows how activities are
@@ -34,6 +37,8 @@ interface SeedEntry {
   type: ActivityType;
   /** Email of the responsible leader; resolved to a user id when seeding. */
   leaderEmail: string;
+  /** Troop name; resolved via `troopSlug()` when seeding. Every patrol below must belong to it. */
+  troop: string;
   /** Patrol names; an empty list means the whole troop. */
   patrols: string[];
   capacity: number | null;
@@ -61,6 +66,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: LEADER,
+    troop: "Scouts",
     patrols: [],
     capacity: 64,
     status: "completed",
@@ -74,6 +80,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Activity Centre",
     type: "outdoor",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: ["Otter"],
     capacity: 12,
     status: "completed",
@@ -87,6 +94,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: ASSISTANT,
+    troop: "Jeannettes",
     patrols: [],
     capacity: 64,
     status: "completed",
@@ -94,14 +102,15 @@ const SEED: SeedEntry[] = [
   {
     name: "District Pioneering Challenge",
     description:
-      "Two patrols entered the district challenge. Kestrel placed second overall.",
+      "Kestrel entered the district challenge and placed second overall.",
     date: "2026-08-15",
     startTime: "10:00",
     endTime: "16:30",
     location: "Gilwell Park",
     type: "competition",
     leaderEmail: ADMIN,
-    patrols: ["Kestrel", "Falcon"],
+    troop: "Jeannettes",
+    patrols: ["Kestrel"],
     capacity: 16,
     status: "completed",
   },
@@ -114,6 +123,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "skills",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: [],
     capacity: 64,
     status: "completed",
@@ -127,6 +137,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Towpath",
     type: "service",
     leaderEmail: ASSISTANT,
+    troop: "Louveteaux",
     patrols: [],
     capacity: 40,
     status: "completed",
@@ -140,6 +151,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: LEADER,
+    troop: "Scouts",
     patrols: [],
     capacity: 64,
     status: "completed",
@@ -156,6 +168,7 @@ const SEED: SeedEntry[] = [
     location: "Beacon Hill",
     type: "outdoor",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: [],
     capacity: 40,
     status: "published",
@@ -169,6 +182,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: ADMIN,
+    troop: "Jeannettes",
     patrols: [],
     capacity: 64,
     status: "published",
@@ -183,6 +197,7 @@ const SEED: SeedEntry[] = [
     location: "Beacon Hill",
     type: "skills",
     leaderEmail: LEADER,
+    troop: "Scouts",
     patrols: [],
     capacity: 48,
     status: "published",
@@ -196,7 +211,8 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: ASSISTANT,
-    patrols: ["Kingfisher"],
+    troop: "Louveteaux",
+    patrols: [],
     capacity: null,
     status: "published",
   },
@@ -209,6 +225,7 @@ const SEED: SeedEntry[] = [
     location: "Hollow Quarry",
     type: "outdoor",
     leaderEmail: ADMIN,
+    troop: "Caravelles",
     patrols: ["Peregrine"],
     capacity: 12,
     status: "published",
@@ -222,6 +239,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "skills",
     leaderEmail: LEADER,
+    troop: "Scouts",
     patrols: ["Heron"],
     capacity: null,
     status: "published",
@@ -236,6 +254,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "competition",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: [],
     capacity: 60,
     status: "published",
@@ -249,6 +268,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "meeting",
     leaderEmail: ASSISTANT,
+    troop: "Caravelles",
     patrols: [],
     capacity: 64,
     status: "published",
@@ -262,6 +282,7 @@ const SEED: SeedEntry[] = [
     location: "District Headquarters",
     type: "training",
     leaderEmail: ADMIN,
+    troop: "Louveteaux",
     patrols: [],
     capacity: 20,
     status: "published",
@@ -275,6 +296,7 @@ const SEED: SeedEntry[] = [
     location: "Lower Field",
     type: "meeting",
     leaderEmail: ASSISTANT,
+    troop: "Routiers",
     patrols: [],
     capacity: 64,
     status: "published",
@@ -288,6 +310,7 @@ const SEED: SeedEntry[] = [
     location: "Gilwell Park",
     type: "outdoor",
     leaderEmail: LEADER,
+    troop: "Scouts",
     patrols: [],
     capacity: 45,
     status: "published",
@@ -301,6 +324,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "skills",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: [],
     capacity: 64,
     status: "published",
@@ -317,6 +341,7 @@ const SEED: SeedEntry[] = [
     location: "Beacon Ridge",
     type: "outdoor",
     leaderEmail: ADMIN,
+    troop: "Scouts",
     patrols: ["Badger"],
     capacity: 20,
     status: "draft",
@@ -330,6 +355,7 @@ const SEED: SeedEntry[] = [
     location: "Lower Field",
     type: "meeting",
     leaderEmail: ASSISTANT,
+    troop: "Jeannettes",
     patrols: [],
     capacity: null,
     status: "draft",
@@ -343,6 +369,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Scout Hut",
     type: "social",
     leaderEmail: ADMIN,
+    troop: "Caravelles",
     patrols: [],
     capacity: 150,
     status: "draft",
@@ -358,6 +385,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Activity Centre",
     type: "outdoor",
     leaderEmail: LEADER,
+    troop: "Guides",
     patrols: ["Otter"],
     capacity: 16,
     status: "cancelled",
@@ -372,6 +400,7 @@ const SEED: SeedEntry[] = [
     location: "Riverside Leisure Centre",
     type: "competition",
     leaderEmail: ADMIN,
+    troop: "Routiers",
     patrols: [],
     capacity: 30,
     status: "cancelled",
@@ -380,38 +409,64 @@ const SEED: SeedEntry[] = [
 ];
 
 /**
+ * Records written before troops existed carried no `troopId`. Resolved the
+ * same way `migrateScout` does: from the first participating patrol's troop,
+ * falling back to Scouts for a whole-troop record with nothing to go on.
+ */
+function migrateActivity(record: Activity): Activity {
+  if (record.troopId !== undefined) return record;
+
+  const troopId = record.patrolIds[0]
+    ? (PATROL_TROOP_BY_SLUG[record.patrolIds[0]] ?? patrolTroopName(""))
+    : patrolTroopName("");
+
+  return { ...record, troopId };
+}
+
+/**
  * Seeding resolves leaders by email rather than by id, because user ids are
  * generated when the user file is seeded and are not knowable up front.
  */
-const store = createJsonStore<Activity>("activities.json", async () => {
-  const users = await userStore.listUsers();
-  const byEmail = new Map(users.map((user) => [user.email, user.id]));
-  const fallback = users[0]?.id ?? "";
+const store = createJsonStore<Activity>(
+  "activities.json",
+  async () => {
+    const users = await userStore.listUsers();
+    const byEmail = new Map(users.map((user) => [user.email, user.id]));
+    const fallback = users[0]?.id ?? "";
 
-  return SEED.map((entry) => ({
-    id: slug(entry.name),
-    name: entry.name,
-    description: entry.description,
-    date: entry.date,
-    startTime: entry.startTime,
-    endTime: entry.endTime,
-    location: entry.location,
-    type: entry.type,
-    leaderId: byEmail.get(entry.leaderEmail) ?? fallback,
-    patrolIds: entry.patrols.map(patrolSlug),
-    capacity: entry.capacity,
-    status: entry.status,
-    cancellationReason: entry.cancellationReason ?? "",
-    cancelledAt: entry.status === "cancelled" ? SEEDED_AT : null,
-    createdAt: SEEDED_AT,
-    updatedAt: SEEDED_AT,
-  }));
-});
+    return SEED.map((entry) => ({
+      id: slug(entry.name),
+      name: entry.name,
+      description: entry.description,
+      date: entry.date,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      location: entry.location,
+      type: entry.type,
+      leaderId: byEmail.get(entry.leaderEmail) ?? fallback,
+      troopId: troopSlug(entry.troop),
+      patrolIds: entry.patrols.map(patrolSlug),
+      capacity: entry.capacity,
+      status: entry.status,
+      cancellationReason: entry.cancellationReason ?? "",
+      cancelledAt: entry.status === "cancelled" ? SEEDED_AT : null,
+      createdAt: SEEDED_AT,
+      updatedAt: SEEDED_AT,
+    }));
+  },
+  { migrate: migrateActivity, autoSeed: false },
+);
 
 /* --------------------------------- queries -------------------------------- */
 
 export async function allActivities(): Promise<Activity[]> {
   return store.all();
+}
+
+/** Activities visible under `scope` - every activity for an admin, or just the caller's troop(s) otherwise. */
+export async function activitiesInScope(scope: TroopScope): Promise<Activity[]> {
+  const activities = await store.all();
+  return activities.filter((activity) => inScope(scope, activity.troopId));
 }
 
 export async function findActivity(id: string): Promise<Activity | null> {

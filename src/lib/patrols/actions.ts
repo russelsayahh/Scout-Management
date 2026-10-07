@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
 import type { ActionResult, FormState } from "@/lib/form-state";
+import * as patrolStore from "@/lib/patrols/store";
 import * as service from "@/lib/patrols/service";
 import type { PatrolStatus } from "@/lib/patrols/types";
 import {
@@ -17,8 +19,11 @@ import { hasErrors } from "@/lib/validation";
 /**
  * Server Actions for patrols.
  *
- * Every one re-checks `patrols.manage`. The UI hides these controls from roles
- * without it, but that is presentation - this is the enforcement.
+ * Every one re-checks `patrols.manage` and, separately, that the patrol being
+ * touched is inside the caller's troop scope - a role permission says what a
+ * leader may do, the scope says which records they may do it to. The UI hides
+ * controls and options accordingly, but that is presentation; these checks are
+ * the enforcement.
  */
 
 function field(formData: FormData, name: string): string {
@@ -31,9 +36,17 @@ const FORBIDDEN: FormState = {
   message: "You do not have permission to change patrols.",
 };
 
-async function canManage(): Promise<boolean> {
+/** Loads the caller and their scope, or null if they may not manage patrols at all. */
+async function manageContext() {
   const user = await getCurrentUser();
-  return Boolean(user && can(user.role, "patrols.manage"));
+  if (!user || !can(user.role, "patrols.manage")) return null;
+  return { user, scope: await resolveTroopScope(user) };
+}
+
+/** True when `patrolId` exists and falls inside `scope`. */
+async function patrolInScope(patrolId: string, scope: Awaited<ReturnType<typeof resolveTroopScope>>) {
+  const patrol = await patrolStore.findPatrol(patrolId);
+  return patrol !== null && inScope(scope, patrol.troopId);
 }
 
 function readPatrolForm(formData: FormData): PatrolFormInput {
@@ -42,6 +55,7 @@ function readPatrolForm(formData: FormData): PatrolFormInput {
     description: field(formData, "description"),
     status: field(formData, "status"),
     patrolLeaderId: field(formData, "patrolLeaderId"),
+    troopId: field(formData, "troopId"),
   };
 }
 
@@ -59,7 +73,8 @@ export async function createPatrolAction(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (!(await canManage())) return FORBIDDEN;
+  const context = await manageContext();
+  if (!context) return FORBIDDEN;
 
   const input = readPatrolForm(formData);
   const values = { name: input.name, description: input.description, status: input.status };
@@ -74,11 +89,23 @@ export async function createPatrolAction(
     };
   }
 
+  // The troop is never taken on trust: whatever the form submitted, only a
+  // troop the caller can actually access is honoured.
+  if (!inScope(context.scope, input.troopId)) {
+    return {
+      status: "error",
+      message: "Choose a troop you have access to.",
+      fieldErrors: { troopId: "That troop is not available to you." },
+      values,
+    };
+  }
+
   const result = await service.addPatrol({
     name: input.name,
     description: input.description,
     status: input.status as PatrolStatus,
     patrolLeaderId: null,
+    troopId: input.troopId,
   });
 
   if (!result.ok) {
@@ -95,10 +122,14 @@ export async function updatePatrolAction(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (!(await canManage())) return FORBIDDEN;
+  const context = await manageContext();
+  if (!context) return FORBIDDEN;
 
   const id = field(formData, "id");
   if (!id) return { status: "error", message: "That patrol could not be found." };
+  if (!(await patrolInScope(id, context.scope))) {
+    return { status: "error", message: "That patrol could not be found." };
+  }
 
   const input = readPatrolForm(formData);
   const values = { name: input.name, description: input.description, status: input.status };
@@ -134,8 +165,10 @@ export async function archivePatrolAction(
   id: string,
   reason: string,
 ): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to archive patrols." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to archive patrols." };
+  if (!(await patrolInScope(id, context.scope))) {
+    return { ok: false, message: "That patrol could not be found." };
   }
 
   const result = await service.archivePatrol(id, reason);
@@ -146,8 +179,10 @@ export async function archivePatrolAction(
 }
 
 export async function restorePatrolAction(id: string): Promise<ActionResult> {
-  if (!(await canManage())) {
-    return { ok: false, message: "You do not have permission to restore patrols." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to restore patrols." };
+  if (!(await patrolInScope(id, context.scope))) {
+    return { ok: false, message: "That patrol could not be found." };
   }
 
   const result = await service.restorePatrol(id);
@@ -163,8 +198,12 @@ export async function assignScoutsAction(
   patrolId: string,
   scoutIds: string[],
 ): Promise<ActionResult> {
-  if (!(await canManage())) {
+  const context = await manageContext();
+  if (!context) {
     return { ok: false, message: "You do not have permission to change patrol membership." };
+  }
+  if (!(await patrolInScope(patrolId, context.scope))) {
+    return { ok: false, message: "That patrol could not be found." };
   }
 
   const result = await service.assignScoutsToPatrol(patrolId, scoutIds);
@@ -178,8 +217,12 @@ export async function removeScoutAction(
   patrolId: string,
   scoutId: string,
 ): Promise<ActionResult> {
-  if (!(await canManage())) {
+  const context = await manageContext();
+  if (!context) {
     return { ok: false, message: "You do not have permission to change patrol membership." };
+  }
+  if (!(await patrolInScope(patrolId, context.scope))) {
+    return { ok: false, message: "That patrol could not be found." };
   }
 
   const result = await service.removeScoutFromPatrol(patrolId, scoutId);
@@ -193,8 +236,12 @@ export async function setPatrolLeaderAction(
   patrolId: string,
   scoutId: string | null,
 ): Promise<ActionResult> {
-  if (!(await canManage())) {
+  const context = await manageContext();
+  if (!context) {
     return { ok: false, message: "You do not have permission to appoint a patrol leader." };
+  }
+  if (!(await patrolInScope(patrolId, context.scope))) {
+    return { ok: false, message: "That patrol could not be found." };
   }
 
   const result = await service.setPatrolLeader(patrolId, scoutId);

@@ -62,6 +62,7 @@ export interface ActivityFormInput {
   location: string;
   type: string;
   leaderId: string;
+  troopId: string;
   patrolIds: string[];
   capacity: string;
 }
@@ -91,6 +92,7 @@ export function validateActivityInput(input: ActivityFormInput): FieldErrors {
   if (type) errors.type = type;
 
   if (!input.leaderId) errors.leaderId = "Choose the leader responsible.";
+  if (!input.troopId) errors.troopId = "Choose a troop.";
 
   const capacity = validateCapacity(input.capacity);
   if (capacity) errors.capacity = capacity;

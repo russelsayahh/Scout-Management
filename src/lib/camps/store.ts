@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import * as userStore from "@/lib/auth/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
 import type { Camp, CampDetails, CampRegistration, CampStatus } from "@/lib/camps/types";
 import { campSlug } from "@/lib/camps/types";
 import { createJsonStore } from "@/lib/json-store";
+import { PATROL_TROOP_BY_SLUG, patrolTroopName } from "@/lib/patrols/store";
 import { patrolSlug } from "@/lib/patrols/types";
 import * as scoutStore from "@/lib/scouts/store";
+import { troopSlug } from "@/lib/troops/types";
 
 /**
  * Camp repository - the only module that knows how camps are persisted.
@@ -50,6 +53,8 @@ interface SeedCamp {
   registrationDeadline: string;
   /** Emails, resolved to user ids when seeding. */
   leaderEmails: string[];
+  /** Troop name; resolved via `troopSlug()` when seeding. Every patrol below must belong to it. */
+  troop: string;
   /** Patrol names; an empty list means the whole troop is invited. */
   patrols: string[];
   maxParticipants: number;
@@ -73,6 +78,7 @@ const SEED: SeedCamp[] = [
     endDate: "2026-04-19",
     registrationDeadline: "2026-04-03",
     leaderEmails: [LEADER, ASSISTANT],
+    troop: "Louveteaux",
     patrols: [],
     maxParticipants: 60,
     status: "completed",
@@ -87,7 +93,8 @@ const SEED: SeedCamp[] = [
     endDate: "2026-07-28",
     registrationDeadline: "2026-06-26",
     leaderEmails: [ADMIN, LEADER],
-    patrols: ["Kestrel", "Peregrine", "Badger"],
+    troop: "Scouts",
+    patrols: ["Badger"],
     maxParticipants: 24,
     status: "completed",
     fill: 0.9,
@@ -100,6 +107,7 @@ const SEED: SeedCamp[] = [
     endDate: "2026-08-16",
     registrationDeadline: "2026-07-31",
     leaderEmails: [LEADER],
+    troop: "Guides",
     patrols: ["Otter"],
     maxParticipants: 16,
     status: "cancelled",
@@ -116,7 +124,8 @@ const SEED: SeedCamp[] = [
     endDate: "2026-09-06",
     registrationDeadline: "2026-08-21",
     leaderEmails: [ADMIN],
-    patrols: ["Kestrel", "Falcon", "Heron"],
+    troop: "Scouts",
+    patrols: ["Heron"],
     maxParticipants: 18,
     status: "registration-closed",
     fill: 1,
@@ -130,6 +139,7 @@ const SEED: SeedCamp[] = [
     endDate: "2026-09-20",
     registrationDeadline: "2026-09-11",
     leaderEmails: [LEADER, ASSISTANT, ADMIN],
+    troop: "Caravelles",
     patrols: [],
     maxParticipants: 60,
     status: "registration-open",
@@ -144,6 +154,7 @@ const SEED: SeedCamp[] = [
     endDate: "2026-10-11",
     registrationDeadline: "2026-09-30",
     leaderEmails: [ADMIN, ASSISTANT],
+    troop: "Routiers",
     patrols: [],
     maxParticipants: 45,
     status: "registration-open",
@@ -158,7 +169,8 @@ const SEED: SeedCamp[] = [
     endDate: "2026-11-15",
     registrationDeadline: "2026-11-01",
     leaderEmails: [ADMIN],
-    patrols: ["Peregrine", "Badger"],
+    troop: "Caravelles",
+    patrols: ["Peregrine"],
     maxParticipants: 12,
     status: "planning",
     fill: 0,
@@ -171,6 +183,7 @@ const SEED: SeedCamp[] = [
     endDate: "2026-12-31",
     registrationDeadline: "2026-12-18",
     leaderEmails: [ASSISTANT],
+    troop: "Jeannettes",
     patrols: [],
     maxParticipants: 40,
     status: "planning",
@@ -178,98 +191,124 @@ const SEED: SeedCamp[] = [
   },
 ];
 
-const store = createJsonStore<Camp>("camps.json", async () => {
-  const [users, scouts] = await Promise.all([userStore.listUsers(), scoutStore.allScouts()]);
-  const nowIso = new Date().toISOString();
+/**
+ * Records written before troops existed carried no `troopId`. Resolved the
+ * same way `migrateScout` does: from the first invited patrol's troop, falling
+ * back to Scouts for a whole-troop record with nothing to go on.
+ */
+function migrateCamp(record: Camp): Camp {
+  if (record.troopId !== undefined) return record;
 
-  const byEmail = new Map(users.map((user) => [user.email, user.id]));
-  const fallback = users[0]?.id ?? "";
-  const eligible = scouts.filter((scout) => !scout.archived && scout.status === "active");
+  const troopId = record.patrolIds[0]
+    ? (PATROL_TROOP_BY_SLUG[record.patrolIds[0]] ?? patrolTroopName(""))
+    : patrolTroopName("");
 
-  return SEED.map((entry) => {
-    const id = campSlug(entry.name);
-    const patrolIds = entry.patrols.map(patrolSlug);
-    const leaderIds = entry.leaderEmails.map((email) => byEmail.get(email) ?? fallback);
+  return { ...record, troopId };
+}
 
-    const invited = eligible.filter(
-      (scout) =>
-        patrolIds.length === 0 ||
-        (scout.patrolId !== null && patrolIds.includes(scout.patrolId)),
-    );
+const store = createJsonStore<Camp>(
+  "camps.json",
+  async () => {
+    const [users, scouts] = await Promise.all([userStore.listUsers(), scoutStore.allScouts()]);
+    const nowIso = new Date().toISOString();
 
-    // A camp is written up about eight weeks out and announced four weeks
-    // later, so the timeline reads in the order things actually happen. Both
-    // are held back to today: a camp far enough ahead would otherwise claim to
-    // have been added next month.
-    const createdAt = earliest(
-      shiftDays(entry.registrationDeadline, -PLANNED_BEFORE_DEADLINE, "09:00:00.000Z"),
-      nowIso,
-    );
-    const openedAt =
-      entry.status === "planning"
-        ? null
-        : earliest(
-            shiftDays(entry.registrationDeadline, -OPENED_BEFORE_DEADLINE, "09:00:00.000Z"),
-            nowIso,
-          );
+    const byEmail = new Map(users.map((user) => [user.email, user.id]));
+    const fallback = users[0]?.id ?? "";
+    const eligible = scouts.filter((scout) => !scout.archived && scout.status === "active");
 
-    // Deterministic roster: the same scouts sign up on every reseed.
-    const wanted = Math.min(
-      entry.maxParticipants,
-      Math.round(invited.length * entry.fill),
-    );
-    const registrations: CampRegistration[] = invited
-      .map((scout) => ({ scout, roll: hash(`${id}:${scout.id}`) }))
-      .sort((a, b) => a.roll - b.roll)
-      .slice(0, wanted)
-      .map(({ scout, roll }) => {
-        // Signed up across the weeks after the announcement rather than all at
-        // once, and never later than today.
-        const offered = openedAt ?? createdAt;
-        const signedUp = shiftDays(offered.slice(0, 10), roll % 21, "12:00:00.000Z");
+    return SEED.map((entry) => {
+      const id = campSlug(entry.name);
+      const patrolIds = entry.patrols.map(patrolSlug);
+      const leaderIds = entry.leaderEmails.map((email) => byEmail.get(email) ?? fallback);
 
-        return {
-          scoutId: scout.id,
-          registeredAt: earliest(signedUp, nowIso),
-          registeredBy: leaderIds[roll % leaderIds.length] ?? fallback,
-        };
-      });
+      const invited = eligible.filter(
+        (scout) =>
+          patrolIds.length === 0 ||
+          (scout.patrolId !== null && patrolIds.includes(scout.patrolId)),
+      );
 
-    const closedAt =
-      entry.status === "registration-closed" ||
-      entry.status === "ongoing" ||
-      entry.status === "completed"
-        ? `${entry.registrationDeadline}T23:00:00.000Z`
-        : null;
+      // A camp is written up about eight weeks out and announced four weeks
+      // later, so the timeline reads in the order things actually happen. Both
+      // are held back to today: a camp far enough ahead would otherwise claim to
+      // have been added next month.
+      const createdAt = earliest(
+        shiftDays(entry.registrationDeadline, -PLANNED_BEFORE_DEADLINE, "09:00:00.000Z"),
+        nowIso,
+      );
+      const openedAt =
+        entry.status === "planning"
+          ? null
+          : earliest(
+              shiftDays(entry.registrationDeadline, -OPENED_BEFORE_DEADLINE, "09:00:00.000Z"),
+              nowIso,
+            );
 
-    return {
-      id,
-      name: entry.name,
-      description: entry.description,
-      location: entry.location,
-      startDate: entry.startDate,
-      endDate: entry.endDate,
-      registrationDeadline: entry.registrationDeadline,
-      leaderIds,
-      patrolIds,
-      maxParticipants: entry.maxParticipants,
-      status: entry.status,
-      registrations,
-      registrationOpenedAt: openedAt,
-      registrationClosedAt: closedAt,
-      completedAt: entry.status === "completed" ? `${entry.endDate}T18:00:00.000Z` : null,
-      cancelledAt: entry.status === "cancelled" ? openedAt : null,
-      cancellationReason: entry.cancellationReason ?? "",
-      createdAt,
-      updatedAt: createdAt,
-    };
-  });
-});
+      // Deterministic roster: the same scouts sign up on every reseed.
+      const wanted = Math.min(
+        entry.maxParticipants,
+        Math.round(invited.length * entry.fill),
+      );
+      const registrations: CampRegistration[] = invited
+        .map((scout) => ({ scout, roll: hash(`${id}:${scout.id}`) }))
+        .sort((a, b) => a.roll - b.roll)
+        .slice(0, wanted)
+        .map(({ scout, roll }) => {
+          // Signed up across the weeks after the announcement rather than all at
+          // once, and never later than today.
+          const offered = openedAt ?? createdAt;
+          const signedUp = shiftDays(offered.slice(0, 10), roll % 21, "12:00:00.000Z");
+
+          return {
+            scoutId: scout.id,
+            registeredAt: earliest(signedUp, nowIso),
+            registeredBy: leaderIds[roll % leaderIds.length] ?? fallback,
+          };
+        });
+
+      const closedAt =
+        entry.status === "registration-closed" ||
+        entry.status === "ongoing" ||
+        entry.status === "completed"
+          ? `${entry.registrationDeadline}T23:00:00.000Z`
+          : null;
+
+      return {
+        id,
+        name: entry.name,
+        description: entry.description,
+        location: entry.location,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        registrationDeadline: entry.registrationDeadline,
+        troopId: troopSlug(entry.troop),
+        leaderIds,
+        patrolIds,
+        maxParticipants: entry.maxParticipants,
+        status: entry.status,
+        registrations,
+        registrationOpenedAt: openedAt,
+        registrationClosedAt: closedAt,
+        completedAt: entry.status === "completed" ? `${entry.endDate}T18:00:00.000Z` : null,
+        cancelledAt: entry.status === "cancelled" ? openedAt : null,
+        cancellationReason: entry.cancellationReason ?? "",
+        createdAt,
+        updatedAt: createdAt,
+      };
+    });
+  },
+  { migrate: migrateCamp, autoSeed: false },
+);
 
 /* --------------------------------- queries -------------------------------- */
 
 export async function allCamps(): Promise<Camp[]> {
   return store.all();
+}
+
+/** Camps visible under `scope` - every camp for an admin, or just the caller's troop(s) otherwise. */
+export async function campsInScope(scope: TroopScope): Promise<Camp[]> {
+  const camps = await store.all();
+  return camps.filter((camp) => inScope(scope, camp.troopId));
 }
 
 export async function findCamp(id: string): Promise<Camp | null> {

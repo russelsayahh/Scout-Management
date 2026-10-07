@@ -7,6 +7,8 @@ import type { Role } from "@/lib/auth/types";
  */
 export type Permission =
   | "dashboard.view"
+  | "troops.view"
+  | "troops.manage"
   | "scouts.view"
   | "scouts.manage"
   | "leaders.view"
@@ -30,6 +32,8 @@ export type Permission =
 
 const administrator: Permission[] = [
   "dashboard.view",
+  "troops.view",
+  "troops.manage",
   "scouts.view",
   "scouts.manage",
   "leaders.view",

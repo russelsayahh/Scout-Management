@@ -6,6 +6,7 @@ import { useSession } from "@/components/auth/session-provider";
 import { BrandLockup } from "@/components/layout/brand-mark";
 import { NavItem } from "@/components/layout/nav-item";
 import { useSidebar } from "@/components/layout/sidebar-provider";
+import { TroopSwitcher } from "@/components/layout/troop-switcher";
 import { Button } from "@/components/ui/button";
 import { visibleSecondaryItems, visibleSections } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -14,23 +15,78 @@ import { cn } from "@/lib/utils";
 /** Live counts keyed by nav item, overriding the static badges. */
 export type NavCounts = Record<string, number>;
 
+/** Every troop, for the switcher and for resolving a leader's own troop name(s). */
+export type NavTroops = { id: string; name: string }[];
+
+/** Which troop is currently selected - `"all"` or one of the six troop ids. */
+export type SelectedTroop = string;
+
+/**
+ * The troop the sidebar is scoped to. An administrator gets the switcher, so
+ * they can change it; anyone else only ever sees their own assignment, which
+ * is not theirs to change here.
+ */
+function TroopContext({ troops, selectedTroopId }: { troops: NavTroops; selectedTroopId: SelectedTroop }) {
+  const { role, assignedTroopIds } = useSession();
+
+  if (role === "administrator") {
+    return (
+      <div className="border-b border-line px-3 py-3">
+        <TroopSwitcher troops={troops} selected={selectedTroopId} />
+      </div>
+    );
+  }
+
+  const names = assignedTroopIds
+    .map((id) => troops.find((troop) => troop.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  return (
+    <div className="border-b border-line px-3 py-3">
+      <p className="truncate text-[12px] font-medium text-ink-secondary">
+        {names.length > 0 ? names.join(", ") : "No troop assigned"}
+      </p>
+    </div>
+  );
+}
+
 /** Nav body shared by the desktop rail and the mobile drawer. */
 function SidebarContent({
   collapsed,
   counts,
+  troops,
+  selectedTroopId,
   onNavigate,
 }: {
   collapsed: boolean;
   counts: NavCounts;
+  troops: NavTroops;
+  selectedTroopId: SelectedTroop;
   onNavigate?: () => void;
 }) {
   // Only the sections this role can actually open are rendered.
-  const { role } = useSession();
+  const { role, assignedTroopIds } = useSession();
   const sections = visibleSections(role);
   const secondary = visibleSecondaryItems(role);
 
+  // An administrator's own troop switcher right above already says which
+  // troop is in view, so this item stays a stable "Members" for them rather
+  // than doubling that up - and it sidesteps "Scouts" reading as if it only
+  // ever meant the troop of that name. A leader has no switcher, so their
+  // reading is different: "Scouts" becomes their own troop's name whenever
+  // they are looking at exactly one (their single assignment); with more
+  // than one assigned, no single name would be honest, so it stays generic.
+  const scoutsLabel =
+    role === "administrator"
+      ? "Members"
+      : assignedTroopIds.length === 1
+        ? (troops.find((troop) => troop.id === assignedTroopIds[0])?.name ?? null)
+        : null;
+
   return (
     <>
+      {!collapsed && <TroopContext troops={troops} selectedTroopId={selectedTroopId} />}
+
       <nav
         className="scrollbar-slim flex-1 overflow-y-auto px-3 py-4"
         aria-label="Main navigation"
@@ -55,7 +111,11 @@ function SidebarContent({
               {section.items.map((item) => (
                 <NavItem
                   key={item.key}
-                  item={item}
+                  item={
+                    item.key === "scouts" && scoutsLabel
+                      ? { ...item, title: scoutsLabel }
+                      : item
+                  }
                   badge={counts[item.key]}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
@@ -102,7 +162,15 @@ function SidebarContent({
 }
 
 /** Persistent rail from the `lg` breakpoint up. */
-export function DesktopSidebar({ counts }: { counts: NavCounts }) {
+export function DesktopSidebar({
+  counts,
+  troops,
+  selectedTroopId,
+}: {
+  counts: NavCounts;
+  troops: NavTroops;
+  selectedTroopId: SelectedTroop;
+}) {
   const { collapsed, toggleCollapsed } = useSidebar();
 
   return (
@@ -146,13 +214,26 @@ export function DesktopSidebar({ counts }: { counts: NavCounts }) {
         </div>
       )}
 
-      <SidebarContent collapsed={collapsed} counts={counts} />
+      <SidebarContent
+        collapsed={collapsed}
+        counts={counts}
+        troops={troops}
+        selectedTroopId={selectedTroopId}
+      />
     </aside>
   );
 }
 
 /** Off-canvas drawer below `lg`. */
-export function MobileSidebar({ counts }: { counts: NavCounts }) {
+export function MobileSidebar({
+  counts,
+  troops,
+  selectedTroopId,
+}: {
+  counts: NavCounts;
+  troops: NavTroops;
+  selectedTroopId: SelectedTroop;
+}) {
   const { mobileOpen, closeMobile } = useSidebar();
 
   if (!mobileOpen) return null;
@@ -179,7 +260,13 @@ export function MobileSidebar({ counts }: { counts: NavCounts }) {
           </Button>
         </div>
 
-        <SidebarContent collapsed={false} counts={counts} onNavigate={closeMobile} />
+        <SidebarContent
+          collapsed={false}
+          counts={counts}
+          troops={troops}
+          selectedTroopId={selectedTroopId}
+          onNavigate={closeMobile}
+        />
       </div>
     </div>
   );

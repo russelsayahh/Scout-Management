@@ -6,7 +6,8 @@ import { AccessDenied } from "@/components/shared/access-denied";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
-import { getLeader, patrolChoices } from "@/lib/leaders/service";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
+import { getLeader, leaderInScope, patrolChoices, troopChoices } from "@/lib/leaders/service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -29,7 +30,10 @@ export default async function EditLeaderPage({ params }: PageProps) {
   const leader = await getLeader(id);
   if (!leader) notFound();
 
-  const patrols = await patrolChoices();
+  const scope = await resolveTroopScope(user);
+  if (!leaderInScope(leader, scope)) notFound();
+
+  const [patrols, troops] = await Promise.all([patrolChoices(scope), troopChoices(scope)]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -39,7 +43,13 @@ export default async function EditLeaderPage({ params }: PageProps) {
         description="Changes are saved to their profile immediately."
       />
 
-      <LeaderForm leader={leader} patrols={patrols} assignedPatrolIds={leader.assignedPatrolIds} />
+      <LeaderForm
+        leader={leader}
+        patrols={patrols}
+        troops={troops}
+        assignedPatrolIds={leader.assignedPatrolIds}
+        assignedTroopIds={leader.assignedTroopIds}
+      />
     </div>
   );
 }

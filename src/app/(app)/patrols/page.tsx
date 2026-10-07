@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { listPatrols } from "@/lib/patrols/service";
 
 export const metadata: Metadata = {
@@ -29,16 +30,17 @@ export default async function PatrolsPage({
   }
 
   const canManage = can(user.role, "patrols.manage");
+  const scope = await resolveTroopScope(user);
 
   const params = await searchParams;
   const showArchived = params.archived === "1";
 
-  const patrols = await listPatrols(showArchived);
+  const patrols = await listPatrols(scope, showArchived);
   const current = patrols.filter((entry) => !entry.patrol.archived);
   const archivedCount = patrols.length - current.length;
 
   // The archived count is only known when they are included in the query.
-  const allPatrols = showArchived ? patrols : await listPatrols(true);
+  const allPatrols = showArchived ? patrols : await listPatrols(scope, true);
   const totalArchived = allPatrols.filter((entry) => entry.patrol.archived).length;
 
   const assigned = patrols.reduce((sum, entry) => sum + entry.memberCount, 0);

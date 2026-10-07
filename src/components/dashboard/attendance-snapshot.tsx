@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
 import { Sparkline } from "@/components/ui/sparkline";
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import { attendanceOverview } from "@/lib/attendance/service";
 import { ATTENDANCE_TARGET } from "@/lib/attendance/types";
 import { formatPercent } from "@/lib/format";
@@ -13,8 +14,9 @@ import { formatPercent } from "@/lib/format";
  * The meter's position is stated in words underneath, so the reading never
  * depends on the fill colour.
  */
-export async function AttendanceSnapshot() {
+export async function AttendanceSnapshot({ scope }: { scope: TroopScope }) {
   const { tally, registersTaken, outstanding, flagged, trend } = await attendanceOverview(
+    scope,
     new Date(),
   );
 

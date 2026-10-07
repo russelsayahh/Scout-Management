@@ -8,10 +8,12 @@ import {
   getActivity,
   leaderOptions,
   patrolChoices,
-  troopSize,
+  troopSizes,
 } from "@/lib/activities/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope } from "@/lib/auth/troop-scope";
+import { troopsInScope } from "@/lib/troops/service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,13 +33,15 @@ export default async function EditActivityPage({ params }: PageProps) {
   }
 
   const { id } = await params;
-  const [found, patrols, leaders, troop] = await Promise.all([
+  const scope = await resolveTroopScope(user);
+  const [found, patrols, leaders, sizes, troops] = await Promise.all([
     getActivity(id, new Date()),
-    patrolChoices(),
+    patrolChoices(scope),
     leaderOptions(),
-    troopSize(),
+    troopSizes(scope),
+    troopsInScope(scope),
   ]);
-  if (!found) notFound();
+  if (!found || !inScope(scope, found.activity.troopId)) notFound();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -52,7 +56,8 @@ export default async function EditActivityPage({ params }: PageProps) {
         activity={found.activity}
         patrols={patrols}
         leaders={leaders}
-        troopSize={troop}
+        troops={troops}
+        troopSizes={sizes}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import * as activityStore from "@/lib/activities/store";
 import { formatTimeRange } from "@/lib/activities/types";
 import * as userStore from "@/lib/auth/store";
+import { inScope, type TroopScope } from "@/lib/auth/troop-scope";
 import type { Role } from "@/lib/auth/types";
 import * as campStore from "@/lib/camps/store";
 import { isUpcoming as campUpcoming } from "@/lib/camps/types";
@@ -56,8 +57,8 @@ function failure(message: string, fieldErrors?: FieldErrors): ServiceResult<neve
 
 /* -------------------------------- positions ------------------------------- */
 
-/** Units out on loan, per item id. */
-async function onLoanMap(): Promise<Map<string, number>> {
+/** Units out on loan, per item id - the physical truth, never scope-narrowed. */
+export async function onLoanMap(): Promise<Map<string, number>> {
   const loans = await store.allLoans();
   const out = new Map<string, number>();
 
@@ -69,7 +70,7 @@ async function onLoanMap(): Promise<Map<string, number>> {
   return out;
 }
 
-function positionOf(item: EquipmentItem, onLoan: number): StockPosition {
+export function positionOf(item: EquipmentItem, onLoan: number): StockPosition {
   return {
     quantity: item.quantity,
     onLoan,
@@ -207,23 +208,33 @@ export interface ItemWithDetails {
   blockMessage: string | null;
 }
 
-export async function getItem(id: string, now: Date): Promise<ItemWithDetails | null> {
+export async function getItem(
+  scope: TroopScope,
+  id: string,
+  now: Date,
+): Promise<ItemWithDetails | null> {
   const item = await store.findItem(id);
   if (!item) return null;
 
   const loans = await store.loansForItem(id);
   const rows = await toRows(loans, now);
 
-  const out = rows
-    .filter((row) => isOpen(row.loan))
-    .sort((a, b) => a.loan.checkedOutAt.localeCompare(b.loan.checkedOutAt));
-  const history = rows
-    .filter((row) => !isOpen(row.loan))
-    .sort((a, b) => (b.loan.returnedAt ?? "").localeCompare(a.loan.returnedAt ?? ""));
-
-  const onLoan = out.reduce((sum, row) => sum + row.loan.quantity, 0);
+  // Stock position is a physical fact about the shared catalog - it comes
+  // from every loan regardless of who may see it, or a leader whose troop
+  // holds none of the open loans would see stock that is not really there.
+  // Only the lists below are narrowed to what the caller's troop(s) may see.
+  const openRows = rows.filter((row) => isOpen(row.loan));
+  const onLoan = openRows.reduce((sum, row) => sum + row.loan.quantity, 0);
   const position = positionOf(item, onLoan);
   const block = checkoutBlock(item, position);
+
+  const visible = rows.filter((row) => inScope(scope, row.loan.troopId));
+  const out = visible
+    .filter((row) => isOpen(row.loan))
+    .sort((a, b) => a.loan.checkedOutAt.localeCompare(b.loan.checkedOutAt));
+  const history = visible
+    .filter((row) => !isOpen(row.loan))
+    .sort((a, b) => (b.loan.returnedAt ?? "").localeCompare(a.loan.returnedAt ?? ""));
 
   return {
     item,
@@ -237,8 +248,11 @@ export async function getItem(id: string, now: Date): Promise<ItemWithDetails | 
 }
 
 /** Everything currently out, for the store's "who has what" view. */
-export async function openLoans(now: Date): Promise<(LoanRow & { item: EquipmentItem })[]> {
-  const [loans, items] = await Promise.all([store.allLoans(), store.allItems()]);
+export async function openLoans(
+  scope: TroopScope,
+  now: Date,
+): Promise<(LoanRow & { item: EquipmentItem })[]> {
+  const [loans, items] = await Promise.all([store.loansInScope(scope), store.allItems()]);
   const byId = new Map(items.map((item) => [item.id, item]));
 
   const open = loans.filter(isOpen);
@@ -298,8 +312,16 @@ export interface EquipmentSummary {
   retired: number;
 }
 
-export async function equipmentSummary(now: Date): Promise<EquipmentSummary> {
-  const [items, loans] = await Promise.all([store.allItems(), store.allLoans()]);
+/**
+ * Item-derived figures (`items`, `units`, `damaged`, `lost`, `needingAttention`,
+ * `retired`) come from the shared catalog and stay the same for everyone.
+ * Loan-derived figures (`onLoan`, `overdue`) are narrowed to `scope`.
+ */
+export async function equipmentSummary(
+  scope: TroopScope,
+  now: Date,
+): Promise<EquipmentSummary> {
+  const [items, loans] = await Promise.all([store.allItems(), store.loansInScope(scope)]);
 
   let unitCount = 0;
   let damaged = 0;
@@ -337,8 +359,8 @@ export async function equipmentSummary(now: Date): Promise<EquipmentSummary> {
 }
 
 /** The sidebar badge: loans that are late back, which is what needs chasing. */
-export async function countOverdueLoans(now: Date): Promise<number> {
-  const loans = await store.allLoans();
+export async function countOverdueLoans(scope: TroopScope, now: Date): Promise<number> {
+  const loans = await store.loansInScope(scope);
   return loans.filter((loan) => isOpen(loan) && isOverdue(loan, now)).length;
 }
 

@@ -27,6 +27,7 @@ export interface LeaderFormInput {
   position: string;
   avatar: string | null;
   patrolIds: string[];
+  troopIds: string[];
 }
 
 export function validateLeaderInput(input: LeaderFormInput): FieldErrors {

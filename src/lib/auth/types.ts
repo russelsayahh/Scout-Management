@@ -35,6 +35,12 @@ export interface StoredUser {
   position: string;
   /** Patrol ids this leader has been given responsibility for. */
   assignedPatrolIds: string[];
+  /**
+   * Troop ids this leader may access. This is the access-control boundary -
+   * an administrator ignores it and sees every troop; anyone else sees only
+   * what is listed here, on both the frontend and every server-side query.
+   */
+  assignedTroopIds: string[];
   passwordHash: string;
   createdAt: string;
 }
@@ -49,5 +55,6 @@ export interface SessionUser {
   avatar: string | null;
   position: string;
   assignedPatrolIds: string[];
+  assignedTroopIds: string[];
   createdAt: string;
 }

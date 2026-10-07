@@ -32,6 +32,13 @@ export interface Patrol {
   patrolLeaderId: string | null;
   status: PatrolStatus;
 
+  /**
+   * The troop this patrol belongs to. Fixed at creation - moving a patrol to
+   * another troop would silently strand its members' troop invariant, so
+   * nothing in this module ever changes it after the fact.
+   */
+  troopId: string;
+
   archived: boolean;
   archivedAt: string | null;
   archiveReason: string;
@@ -43,7 +50,7 @@ export interface Patrol {
 /** The editable half of a patrol - what the create and edit forms produce. */
 export type PatrolDetails = Pick<
   Patrol,
-  "name" | "description" | "status" | "patrolLeaderId"
+  "name" | "description" | "status" | "patrolLeaderId" | "troopId"
 >;
 
 /** Stable, readable ids for the seeded patrols. */

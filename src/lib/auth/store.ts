@@ -17,11 +17,18 @@ import { createJsonStore } from "@/lib/json-store";
 
 /** Records written before leader profiles existed carried neither field. */
 function migrateUser(record: StoredUser): StoredUser {
-  if (record.position !== undefined && record.assignedPatrolIds !== undefined) return record;
+  if (
+    record.position !== undefined &&
+    record.assignedPatrolIds !== undefined &&
+    record.assignedTroopIds !== undefined
+  ) {
+    return record;
+  }
   return {
     ...record,
     position: record.position ?? "",
     assignedPatrolIds: record.assignedPatrolIds ?? [],
+    assignedTroopIds: record.assignedTroopIds ?? [],
   };
 }
 
@@ -40,6 +47,7 @@ const store = createJsonStore<StoredUser>(
         avatar: null,
         position: "",
         assignedPatrolIds: [],
+        assignedTroopIds: account.assignedTroopIds,
         passwordHash: await hashPassword(DEMO_PASSWORD),
         createdAt: new Date().toISOString(),
       });
@@ -61,6 +69,7 @@ export function toSessionUser(user: StoredUser): SessionUser {
     avatar: user.avatar,
     position: user.position,
     assignedPatrolIds: user.assignedPatrolIds,
+    assignedTroopIds: user.assignedTroopIds,
     createdAt: user.createdAt,
   };
 }
@@ -107,6 +116,8 @@ export interface CreateUserInput {
   phone: string;
   role: Role;
   passwordHash: string;
+  /** Troops this account starts assigned to - the troop chosen at sign-up, or none for an admin-created account. */
+  assignedTroopIds: string[];
 }
 
 /** Returns null when the email is already taken. */
@@ -124,6 +135,7 @@ export async function createUser(input: CreateUserInput): Promise<StoredUser | n
       avatar: null,
       position: "",
       assignedPatrolIds: [],
+      assignedTroopIds: input.assignedTroopIds,
       passwordHash: input.passwordHash,
       createdAt: new Date().toISOString(),
     };

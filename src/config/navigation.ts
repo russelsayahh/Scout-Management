@@ -11,6 +11,7 @@ import {
   Tent,
   UserCog,
   Users,
+  Users2,
 } from "lucide-react";
 
 import { can } from "@/lib/auth/permissions";
@@ -34,6 +35,13 @@ export const navSections: NavSection[] = [
         href: "/",
         icon: LayoutDashboard,
         permission: "dashboard.view",
+      },
+      {
+        key: "troops",
+        title: "Troops",
+        href: "/troops",
+        icon: Users2,
+        permission: "troops.view",
       },
     ],
   },

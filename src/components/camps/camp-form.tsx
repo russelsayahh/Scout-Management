@@ -6,11 +6,11 @@ import { TriangleAlert, Users } from "lucide-react";
 
 import { CampStatusBadge } from "@/components/camps/camp-status-badge";
 import { LeaderPicker, type LeaderChoice } from "@/components/shared/leader-picker";
-import { PatrolPicker, type PatrolChoice } from "@/components/shared/patrol-picker";
+import { PatrolPicker, type PatrolChoice as PickerPatrolChoice } from "@/components/shared/patrol-picker";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TextField, TextareaField } from "@/components/ui/form-field";
+import { SelectField, TextField, TextareaField } from "@/components/ui/form-field";
 import { Spinner } from "@/components/ui/spinner";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { createCampAction, updateCampAction } from "@/lib/camps/actions";
@@ -26,6 +26,7 @@ import {
   validateStartDate,
 } from "@/lib/camps/validation";
 import { initialFormState } from "@/lib/form-state";
+import type { Troop } from "@/lib/troops/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,11 +38,19 @@ import { cn } from "@/lib/utils";
  * correction to the location from quietly announcing something.
  */
 
+/** A patrol choice with its troop, so the form can filter by the chosen troop. */
+interface PatrolChoice extends PickerPatrolChoice {
+  troopId: string;
+}
+
 type CampFormProps = {
+  /** Patrols the caller may pick from - already scoped to their troop(s). */
   patrols: PatrolChoice[];
   leaders: LeaderChoice[];
-  /** Active scouts on the register, for the whole-troop head count. */
-  troopSize: number;
+  /** Troops the caller may place this camp in - a leader sees only their own. */
+  troops: Troop[];
+  /** Active scouts on the register, per troop id, for the whole-troop head count. */
+  troopSizes: Record<string, number>;
 } & (
   | { mode: "create"; camp?: undefined; registered?: undefined }
   | { mode: "edit"; camp: Camp; registered: number }
@@ -53,7 +62,15 @@ function parseIds(value: string | undefined): string[] | null {
   return value ? value.split(",").filter(Boolean) : [];
 }
 
-export function CampForm({ mode, camp, registered, patrols, leaders, troopSize }: CampFormProps) {
+export function CampForm({
+  mode,
+  camp,
+  registered,
+  patrols,
+  leaders,
+  troops,
+  troopSizes,
+}: CampFormProps) {
   const isEdit = mode === "edit";
   const action = isEdit ? updateCampAction : createCampAction;
 
@@ -67,6 +84,7 @@ export function CampForm({ mode, camp, registered, patrols, leaders, troopSize }
   const [maxParticipants, setMaxParticipants] = useState(
     initial("maxParticipants", camp ? String(camp.maxParticipants) : ""),
   );
+  const [troopId, setTroopId] = useState(initial("troopId", camp?.troopId ?? troops[0]?.id ?? ""));
   const [selectedLeaders, setSelectedLeaders] = useState<string[]>(
     parseIds(state.values?.leaderIds) ?? camp?.leaderIds ?? [],
   );
@@ -74,11 +92,16 @@ export function CampForm({ mode, camp, registered, patrols, leaders, troopSize }
     parseIds(state.values?.patrolIds) ?? camp?.patrolIds ?? [],
   );
 
+  // A camp's patrols have to belong to its troop, so switching the troop
+  // clears any patrol that no longer applies.
+  const patrolsInTroop = patrols.filter((patrol) => patrol.troopId === troopId);
+  const troopLocked = troops.length <= 1;
+
   // Real numbers from the register: how many scouts the camp is open to.
   const invited =
     selectedPatrols.length === 0
-      ? troopSize
-      : patrols
+      ? (troopSizes[troopId] ?? 0)
+      : patrolsInTroop
           .filter((patrol) => selectedPatrols.includes(patrol.id))
           .reduce((sum, patrol) => sum + patrol.memberCount, 0);
 
@@ -255,8 +278,38 @@ export function CampForm({ mode, camp, registered, patrols, leaders, troopSize }
             hint="At least one leader has to take responsibility for the camp."
           />
 
+          <div>
+            {troopLocked && <input type="hidden" name="troopId" value={troopId} />}
+            <SelectField
+              label="Troop"
+              // A disabled select submits nothing, so the locked case is
+              // carried by the hidden input above instead.
+              name={troopLocked ? undefined : "troopId"}
+              value={troopId}
+              onChange={(event) => {
+                setTroopId(event.target.value);
+                clearField("troopId");
+                // Patrols from the previous troop no longer apply.
+                setSelectedPatrols((current) =>
+                  current.filter((id) =>
+                    patrols.some((patrol) => patrol.id === id && patrol.troopId === event.target.value),
+                  ),
+                );
+              }}
+              error={errors.troopId}
+              hint={troopLocked ? "Set by your own troop assignment." : "Which section this camp is for."}
+              disabled={pending || troopLocked}
+            >
+              {troops.map((troop) => (
+                <option key={troop.id} value={troop.id}>
+                  {troop.name}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+
           <PatrolPicker
-            patrols={patrols}
+            patrols={patrolsInTroop}
             selected={selectedPatrols}
             onChange={setSelectedPatrols}
             disabled={pending}

@@ -5,6 +5,7 @@ import { ActivityTypeLabel } from "@/components/activities/activity-type-icon";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import type { TroopScope } from "@/lib/auth/troop-scope";
 import { expectedAttendance, upcomingActivities } from "@/lib/activities/service";
 import { formatTimeRange } from "@/lib/activities/types";
 import { splitDateParts } from "@/lib/format";
@@ -16,13 +17,15 @@ import { splitDateParts } from "@/lib/format";
  * cancelled one is not something to plan around.
  */
 export async function UpcomingActivities({
+  scope,
   canManage,
   limit = 5,
 }: {
+  scope: TroopScope;
   canManage: boolean;
   limit?: number;
 }) {
-  const activities = await upcomingActivities(new Date(), limit);
+  const activities = await upcomingActivities(scope, new Date(), limit);
   const expected = await expectedAttendance(activities);
 
   return (

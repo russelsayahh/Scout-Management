@@ -17,6 +17,7 @@ import { attendanceOverview } from "@/lib/attendance/service";
 import { campCounts } from "@/lib/camps/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -25,12 +26,13 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const user = await requireUser();
   const canManageActivities = can(user.role, "activities.manage");
+  const scope = await resolveTroopScope(user);
 
   const now = new Date();
   const [upcoming, attendance, camps] = await Promise.all([
-    countUpcomingActivities(now),
-    attendanceOverview(now),
-    campCounts(now),
+    countUpcomingActivities(scope, now),
+    attendanceOverview(scope, now),
+    campCounts(scope, now),
   ]);
 
   return (
@@ -68,13 +70,13 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <UpcomingActivities canManage={canManageActivities} />
-          <UpcomingCamps canManage={can(user.role, "camps.manage")} />
+          <UpcomingActivities scope={scope} canManage={canManageActivities} />
+          <UpcomingCamps scope={scope} canManage={can(user.role, "camps.manage")} />
           <RecentActivity />
         </div>
 
         <div className="space-y-4">
-          <AttendanceSnapshot />
+          <AttendanceSnapshot scope={scope} />
           <QuickActions />
         </div>
       </div>

@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
+import { inScope, resolveTroopScope, type TroopScope } from "@/lib/auth/troop-scope";
 import * as service from "@/lib/equipment/service";
+import * as store from "@/lib/equipment/store";
 import type {
   AvailabilityStatus,
   EquipmentCategory,
@@ -25,6 +27,12 @@ import { hasErrors } from "@/lib/validation";
  *
  * Every one re-checks `equipment.manage`. The UI hides these controls from
  * roles without it, but that is presentation - this is the enforcement.
+ *
+ * The catalog itself is shared, so item actions need nothing beyond the
+ * permission check. Returning a loan touches one specific existing loan
+ * though, so that action separately checks it falls inside the caller's troop
+ * scope - the same boundary `patrols/actions.ts` enforces on an existing
+ * patrol - before letting it through.
  */
 
 function field(formData: FormData, name: string): string {
@@ -40,6 +48,19 @@ const FORBIDDEN: FormState = {
 async function canManage(): Promise<boolean> {
   const user = await getCurrentUser();
   return Boolean(user && can(user.role, "equipment.manage"));
+}
+
+/** Loads the caller and their troop scope, or null if they may not manage equipment at all. */
+async function manageContext() {
+  const user = await getCurrentUser();
+  if (!user || !can(user.role, "equipment.manage")) return null;
+  return { user, scope: await resolveTroopScope(user) };
+}
+
+/** True when `loanId` exists and falls inside `scope`. */
+async function loanInScope(loanId: string, scope: TroopScope): Promise<boolean> {
+  const loan = await store.findLoan(loanId);
+  return loan !== null && inScope(scope, loan.troopId);
 }
 
 function readForm(formData: FormData): EquipmentFormInput {
@@ -202,12 +223,13 @@ export async function returnLoanAction(
   loanId: string,
   split: { good: number; damaged: number; lost: number },
 ): Promise<ActionResult> {
-  const user = await getCurrentUser();
-  if (!user || !can(user.role, "equipment.manage")) {
-    return { ok: false, message: "You do not have permission to book equipment in." };
+  const context = await manageContext();
+  if (!context) return { ok: false, message: "You do not have permission to book equipment in." };
+  if (!(await loanInScope(loanId, context.scope))) {
+    return { ok: false, message: "That loan could not be found." };
   }
 
-  const result = await service.returnLoan(loanId, split, user.id);
+  const result = await service.returnLoan(loanId, split, context.user.id);
   if (!result.ok) return { ok: false, message: result.message };
 
   revalidateEquipment(itemId);

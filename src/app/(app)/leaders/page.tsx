@@ -7,8 +7,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { roleLabels, type SessionUser } from "@/lib/auth/types";
+import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { leaderCounts, listLeaders } from "@/lib/leaders/service";
-import { patrolNameMap } from "@/lib/patrols/service";
+import { listTroops } from "@/lib/troops/service";
 
 export const metadata: Metadata = {
   title: "Leaders",
@@ -22,18 +23,22 @@ export default async function LeadersPage() {
   }
 
   const canManage = can(user.role, "leaders.manage");
+  const scope = await resolveTroopScope(user);
 
-  const [leaders, counts, names] = await Promise.all([
-    listLeaders(),
-    leaderCounts(),
-    patrolNameMap(),
+  const [leaders, counts, troops] = await Promise.all([
+    listLeaders(scope),
+    leaderCounts(scope),
+    listTroops(),
   ]);
+  // Troop names are never sensitive - the public registration page already
+  // lists all six - so this is unscoped even though `leaders` is not.
+  const troopNames = new Map(troops.map((troop) => [troop.id, troop.name]));
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Leaders"
-        description="Every adult volunteer, their position, and which patrols they run."
+        description="Every adult volunteer, their position, and which troop they're assigned to."
         actions={<Badge tone="neutral">{leaders.length} leaders</Badge>}
       />
 
@@ -50,8 +55,8 @@ export default async function LeadersPage() {
 
       <LeaderTable
         leaders={leaders}
-        patrolNamesFor={(leader: SessionUser) =>
-          leader.assignedPatrolIds.map((id) => names.get(id)).filter((name): name is string => Boolean(name))
+        troopNamesFor={(leader: SessionUser) =>
+          leader.assignedTroopIds.map((id) => troopNames.get(id)).filter((name): name is string => Boolean(name))
         }
         canManage={canManage}
       />

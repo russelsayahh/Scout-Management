@@ -2,6 +2,8 @@ import {
   DesktopSidebar,
   MobileSidebar,
   type NavCounts,
+  type NavTroops,
+  type SelectedTroop,
 } from "@/components/layout/sidebar";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
 import { Topbar } from "@/components/layout/topbar";
@@ -15,16 +17,22 @@ import { Topbar } from "@/components/layout/topbar";
 export function AppShell({
   children,
   navCounts,
+  troops,
+  selectedTroopId,
 }: {
   children: React.ReactNode;
   /** Live nav badge counts, resolved by the layout. */
   navCounts: NavCounts;
+  /** The six troops, for the administrator's switcher and for resolving a leader's own troop name(s). */
+  troops: NavTroops;
+  /** `"all"` or the one troop id an administrator currently has selected. */
+  selectedTroopId: SelectedTroop;
 }) {
   return (
     <SidebarProvider>
       <div className="flex h-dvh overflow-hidden bg-page">
-        <DesktopSidebar counts={navCounts} />
-        <MobileSidebar counts={navCounts} />
+        <DesktopSidebar counts={navCounts} troops={troops} selectedTroopId={selectedTroopId} />
+        <MobileSidebar counts={navCounts} troops={troops} selectedTroopId={selectedTroopId} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />

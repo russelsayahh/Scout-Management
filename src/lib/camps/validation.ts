@@ -84,6 +84,7 @@ export interface CampFormInput {
   startDate: string;
   endDate: string;
   registrationDeadline: string;
+  troopId: string;
   leaderIds: string[];
   patrolIds: string[];
   maxParticipants: string;
@@ -109,6 +110,8 @@ export function validateCampInput(input: CampFormInput): FieldErrors {
 
   const deadline = validateDeadline(input.startDate, input.registrationDeadline);
   if (deadline) errors.registrationDeadline = deadline;
+
+  if (!input.troopId) errors.troopId = "Choose a troop.";
 
   // A camp without somebody in charge is not a camp anyone can run.
   if (input.leaderIds.length === 0) {
