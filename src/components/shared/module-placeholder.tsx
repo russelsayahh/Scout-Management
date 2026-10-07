@@ -48,17 +48,19 @@ export function ModulePlaceholder({
         }
       />
 
-      {/* At-a-glance figures, so the page is not empty while the module is built. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {module.metrics.map((metric) => (
-          <Card key={metric.label} className="px-5 py-4">
-            <p className="text-[12.5px] text-ink-secondary">{metric.label}</p>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">
-              {metric.value}
-            </p>
-          </Card>
-        ))}
-      </div>
+      {/* At-a-glance figures, where there is real data behind the section to show. */}
+      {module.metrics && module.metrics.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {module.metrics.map((metric) => (
+            <Card key={metric.label} className="px-5 py-4">
+              <p className="text-[12.5px] text-ink-secondary">{metric.label}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">
+                {metric.value}
+              </p>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardHeader>

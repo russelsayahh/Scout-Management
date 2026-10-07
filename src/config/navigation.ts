@@ -60,7 +60,6 @@ export const navSections: NavSection[] = [
         title: "Leaders",
         href: "/leaders",
         icon: ShieldCheck,
-        badge: 32,
         permission: "leaders.view",
       },
       {
@@ -107,7 +106,6 @@ export const navSections: NavSection[] = [
         title: "Documents",
         href: "/documents",
         icon: FolderOpen,
-        badge: 6,
         permission: "documents.view",
       },
     ],

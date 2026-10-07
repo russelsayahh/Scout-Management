@@ -9,10 +9,8 @@ import { AuthPasswordField, AuthTextField } from "@/components/auth/auth-field";
 import { Spinner } from "@/components/ui/spinner";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { loginAction } from "@/lib/auth/actions";
-import { DEMO_PASSWORD, demoAccounts } from "@/lib/auth/demo-accounts";
 import { siteConfig } from "@/config/site";
 import { initialFormState } from "@/lib/form-state";
-import { roleLabels } from "@/lib/auth/types";
 import { validateEmail } from "@/lib/auth/validation";
 
 export function LoginForm() {
@@ -104,42 +102,6 @@ export function LoginForm() {
           Create an account
         </Link>
       </p>
-
-      {/* Development aid: the seeded accounts, one per role. */}
-      <section className="mt-8 rounded-xl border border-white/15 bg-white/6 p-4">
-        <h2 className="text-[12px] font-semibold tracking-wide text-white/90">Demo accounts</h2>
-        <p className="mt-0.5 text-[11.5px] text-white/55">
-          Seeded on first run. Pick one to fill the form and see how the roles differ.
-        </p>
-
-        <ul className="mt-3 space-y-1.5">
-          {demoAccounts.map((account) => (
-            <li key={account.email}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setEmail(account.email);
-                  setPassword(DEMO_PASSWORD);
-                  clearField("email");
-                  clearField("password");
-                }}
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-left transition-colors hover:border-white/30 hover:bg-white/10 disabled:opacity-60"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] font-medium text-white">
-                    {roleLabels[account.role]}
-                  </span>
-                  <span className="block truncate text-[11px] text-white/55">
-                    {account.email}
-                  </span>
-                </span>
-                <span className="shrink-0 text-[11px] font-medium text-white/80">Use</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

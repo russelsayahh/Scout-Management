@@ -16,22 +16,21 @@ import { siteConfig } from "@/config/site";
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative min-h-dvh overflow-hidden bg-brand-900">
-      {/* Backdrop: the group's own camp photo, shown in full rather than
-          cropped - it's portrait and this page is not, so `contain` plus a
-          backdrop close to the photo's own night tones is what keeps the
-          letterboxing from reading as empty bars. A dark wash keeps white
+      {/* Backdrop: the group's own crest banner. It's already a landscape,
+          full-bleed design (navy field, centred emblem), so `cover` fills
+          the page edge to edge with no letterboxing. A dark wash keeps white
           text and the glass card legible over it. */}
-      <div className="absolute inset-0 bg-[#050b1c]" aria-hidden>
+      <div className="absolute inset-0 bg-[#0b2456]" aria-hidden>
         <Image
           src="/auth-background.jpg"
           alt=""
           fill
           sizes="100vw"
           quality={100}
-          className="object-contain"
+          className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/20 to-black/45" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/55 via-black/15 to-black/40" />
       </div>
 
       {/* Brand mark, top left, over the backdrop */}

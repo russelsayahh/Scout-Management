@@ -8,6 +8,7 @@ import { can } from "@/lib/auth/permissions";
 import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { countUpcomingCamps } from "@/lib/camps/service";
 import { countOverdueLoans } from "@/lib/equipment/service";
+import { listLeaders } from "@/lib/leaders/service";
 import { countActivePatrols } from "@/lib/patrols/service";
 import { countCurrentScouts } from "@/lib/scouts/service";
 import { listTroops } from "@/lib/troops/service";
@@ -26,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Only counts the role is allowed to see - no point badging a hidden item.
   const navCounts: NavCounts = {};
   if (can(user.role, "scouts.view")) navCounts.scouts = await countCurrentScouts(scope);
+  if (can(user.role, "leaders.view")) navCounts.leaders = (await listLeaders(scope)).length;
   if (can(user.role, "patrols.view")) navCounts.patrols = await countActivePatrols(scope);
   if (can(user.role, "activities.view")) {
     navCounts.activities = await countUpcomingActivities(scope, new Date());

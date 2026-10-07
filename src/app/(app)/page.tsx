@@ -18,6 +18,8 @@ import { campCounts } from "@/lib/camps/service";
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { resolveTroopScope } from "@/lib/auth/troop-scope";
+import { listLeaders } from "@/lib/leaders/service";
+import { countCurrentScouts } from "@/lib/scouts/service";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -29,7 +31,9 @@ export default async function DashboardPage() {
   const scope = await resolveTroopScope(user);
 
   const now = new Date();
-  const [upcoming, attendance, camps] = await Promise.all([
+  const [scouts, leaders, upcoming, attendance, camps] = await Promise.all([
+    countCurrentScouts(scope),
+    listLeaders(scope),
     countUpcomingActivities(scope, now),
     attendanceOverview(scope, now),
     campCounts(scope, now),
@@ -61,6 +65,8 @@ export default async function DashboardPage() {
       />
 
       <StatGrid
+        totalScouts={scouts}
+        totalLeaders={leaders.length}
         upcomingActivities={upcoming}
         attendanceRate={attendance.tally.rate}
         registersTaken={attendance.registersTaken}

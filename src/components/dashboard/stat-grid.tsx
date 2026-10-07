@@ -1,4 +1,4 @@
-import { CalendarDays, ClipboardCheck, Tent } from "lucide-react";
+import { CalendarDays, ClipboardCheck, ShieldCheck, Tent, Users } from "lucide-react";
 
 import { StatCard } from "@/components/ui/stat-card";
 import { dashboardStats } from "@/data/stats";
@@ -8,18 +8,21 @@ import type { Stat } from "@/types";
  * The headline KPI row. Five tiles wrap down to two columns on tablet and one
  * on phones, so no tile ever squeezes its value.
  *
- * The activities, camps and attendance tiles are counted from real records;
- * the rest are still sample figures waiting on the modules behind them. Where a
- * figure is real but its history is not, the tile ships without a trend line
- * rather than with an invented one.
+ * Every tile is counted from real records, passed in as props. None ship with
+ * a trend line or a period-over-period delta: there is no real history
+ * tracked yet, and an invented one would be worse than none.
  */
 export function StatGrid({
+  totalScouts,
+  totalLeaders,
   upcomingActivities,
   attendanceRate,
   registersTaken,
   upcomingCamps,
   campPlacesBooked,
 }: {
+  totalScouts: number;
+  totalLeaders: number;
   upcomingActivities: number;
   /** Null when no register has been taken yet. */
   attendanceRate: number | null;
@@ -29,14 +32,29 @@ export function StatGrid({
   campPlacesBooked: number;
 }) {
   const stats: Stat[] = dashboardStats.map((stat) => {
+    if (stat.key === "total-scouts") {
+      return {
+        ...stat,
+        value: totalScouts,
+        caption: "Active members",
+        icon: Users,
+      };
+    }
+
+    if (stat.key === "total-leaders") {
+      return {
+        ...stat,
+        value: totalLeaders,
+        caption: "Across every troop you can see",
+        icon: ShieldCheck,
+      };
+    }
+
     if (stat.key === "upcoming-activities") {
       return {
         ...stat,
         value: upcomingActivities,
         caption: "Published and still to come",
-        delta: undefined,
-        deltaPeriod: undefined,
-        trend: undefined,
         icon: CalendarDays,
       };
     }
@@ -49,9 +67,6 @@ export function StatGrid({
           registersTaken === 0
             ? "No registers taken yet"
             : `Across ${registersTaken} ${registersTaken === 1 ? "register" : "registers"}`,
-        delta: undefined,
-        deltaPeriod: undefined,
-        trend: undefined,
         icon: ClipboardCheck,
       };
     }
@@ -64,9 +79,6 @@ export function StatGrid({
           campPlacesBooked === 0
             ? "No places booked yet"
             : `${campPlacesBooked} places booked`,
-        delta: undefined,
-        deltaPeriod: undefined,
-        trend: undefined,
         icon: Tent,
       };
     }

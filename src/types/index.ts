@@ -48,7 +48,8 @@ export interface ModuleConfig {
   description: string;
   /** Longer copy shown in the placeholder body. */
   summary: string;
-  metrics: ModuleMetric[];
+  /** Omitted where the section stores no real data yet - there is nothing honest to count. */
+  metrics?: ModuleMetric[];
   plannedFeatures: PlannedFeature[];
 }
 
