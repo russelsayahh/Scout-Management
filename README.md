@@ -224,10 +224,10 @@ into the cookie, a role change applies on that person's very next request.
 | | Administrator | Scout Leader | Assistant Leader |
 |---|---|---|---|
 | Dashboard | view | view | view |
-| Scouts, Patrols, Activities, Camps, Equipment, Documents | manage | manage | view |
-| Leaders | manage | view | - |
+| Scouts, Patrols, Activities, Camps, Equipment, Documents | manage | manage | manage |
+| Leaders | manage | view | view |
 | Attendance | take register | take register | take register |
-| Reports | view | view | - |
+| Reports | view | view | view |
 | Settings | manage | - | - |
 | User accounts | manage | - | - |
 

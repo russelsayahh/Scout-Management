@@ -77,18 +77,8 @@ const scoutLeader: Permission[] = [
   "reports.view",
 ];
 
-/** Helps at meetings: can see records and take the register, but not edit. */
-const assistantLeader: Permission[] = [
-  "dashboard.view",
-  "scouts.view",
-  "patrols.view",
-  "activities.view",
-  "camps.view",
-  "attendance.view",
-  "attendance.record",
-  "equipment.view",
-  "documents.view",
-];
+/** Same access as a Scout Leader. */
+const assistantLeader: Permission[] = [...scoutLeader];
 
 export const rolePermissions: Record<Role, Permission[]> = {
   administrator,

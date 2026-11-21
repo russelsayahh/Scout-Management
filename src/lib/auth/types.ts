@@ -15,7 +15,7 @@ export const roleLabels: Record<Role, string> = {
 export const roleDescriptions: Record<Role, string> = {
   administrator: "Full access, including group settings and user accounts.",
   "scout-leader": "Runs the programme: members, camps, attendance and resources.",
-  "assistant-leader": "Supports meetings: can view records and take the register.",
+  "assistant-leader": "Helps run the programme, with the same access as a Scout Leader.",
 };
 
 /**
