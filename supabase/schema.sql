@@ -167,3 +167,23 @@ create table if not exists equipment_loans (
   "returnedDamaged" integer,
   "returnedLost" integer
 );
+
+-- Word and PDF documents attached to camps and activities. The files live in
+-- the private "attachments" Storage bucket, which the app creates itself on
+-- first upload; this table is the list of them.
+create table if not exists attachments (
+  id text primary key,
+  "parentKind" text,
+  "parentId" text,
+  "fileName" text,
+  "contentType" text,
+  size bigint,
+  "storagePath" text,
+  "uploadedBy" text,
+  "uploadedAt" text
+);
+
+-- Standalone documents (posted straight to the Camps or Activities page rather
+-- than attached to one camp or activity) carry their own title and troop.
+alter table attachments add column if not exists title text;
+alter table attachments add column if not exists "troopId" text;

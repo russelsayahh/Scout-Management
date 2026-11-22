@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
 
+import { AttachmentsCard } from "@/components/attachments/attachments-card";
 import { ActivityActions } from "@/components/activities/activity-actions";
 import { ActivityStatusBadge } from "@/components/activities/activity-status-badge";
 import { ActivityTypeIcon } from "@/components/activities/activity-type-icon";
@@ -184,6 +185,8 @@ export default async function ActivityDetailPage({ params, searchParams }: PageP
               )}
             </CardContent>
           </Card>
+
+          <AttachmentsCard parentKind="activity" parentId={activity.id} canManage={canManage} />
 
           {/* When and where */}
           <Card>

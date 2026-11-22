@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Tent } from "lucide-react";
 
+import { AddDocumentButton } from "@/components/attachments/add-document-button";
+import { DocumentCard } from "@/components/attachments/document-card";
+import { standaloneDocumentRows } from "@/components/attachments/standalone-documents";
 import { CampGrid } from "@/components/camps/camp-grid";
 import { AccessDenied } from "@/components/shared/access-denied";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +16,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { resolveTroopScope } from "@/lib/auth/troop-scope";
 import { campCounts, campFilterLabels, listCamps, type CampFilter } from "@/lib/camps/service";
+import { troopChoices } from "@/lib/leaders/service";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -47,9 +51,11 @@ export default async function CampsPage({
   const params = await searchParams;
   const filter = parseFilter(params.show);
 
-  const [camps, counts] = await Promise.all([
+  const [camps, counts, documents, troops] = await Promise.all([
     listCamps(scope, filter, now),
     campCounts(scope, now),
+    standaloneDocumentRows("camp", scope),
+    canManage ? troopChoices(scope) : Promise.resolve([]),
   ]);
 
   const hrefFor = (value: CampFilter) => (value === "upcoming" ? "/camps" : `/camps?show=${value}`);
@@ -65,6 +71,7 @@ export default async function CampsPage({
             {counts.upcomingRegistrations > 0 && (
               <Badge tone="neutral">{counts.upcomingRegistrations} registered</Badge>
             )}
+            {canManage && <AddDocumentButton parentKind="camp" troops={troops} />}
             {canManage && (
               <Link href="/camps/new" className={buttonStyles()}>
                 <Plus className="size-4" strokeWidth={2.2} aria-hidden />
@@ -99,7 +106,7 @@ export default async function CampsPage({
         ))}
       </div>
 
-      {camps.length === 0 ? (
+      {camps.length === 0 && documents.length === 0 ? (
         <Card>
           <EmptyState
             icon={Tent}
@@ -132,7 +139,12 @@ export default async function CampsPage({
           />
         </Card>
       ) : (
-        <CampGrid camps={camps} canManage={canManage} now={now} />
+        <CampGrid camps={camps} canManage={canManage} now={now}>
+          {/* Documents posted with "Add document" sit alongside the camps. */}
+          {documents.map((row) => (
+            <DocumentCard key={row.id} row={row} canManage={canManage} />
+          ))}
+        </CampGrid>
       )}
     </div>
   );

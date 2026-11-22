@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarSearch, Plus } from "lucide-react";
 
+import { AddDocumentButton } from "@/components/attachments/add-document-button";
+import { DocumentCard } from "@/components/attachments/document-card";
+import { standaloneDocumentRows } from "@/components/attachments/standalone-documents";
 import { ActivityCalendar } from "@/components/activities/activity-calendar";
 import { ActivityFilters } from "@/components/activities/activity-filters";
 import { ActivityTable } from "@/components/activities/activity-table";
@@ -25,6 +28,7 @@ import {
 import { requireUser } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { resolveTroopScope } from "@/lib/auth/troop-scope";
+import { troopChoices } from "@/lib/leaders/service";
 
 export const metadata: Metadata = {
   title: "Activities",
@@ -49,10 +53,12 @@ export default async function ActivitiesPage({
   const now = new Date();
 
   const query = parseActivityQuery(await searchParams);
-  const [context, patrols, counts] = await Promise.all([
+  const [context, patrols, counts, documents, troops] = await Promise.all([
     activityContext(now),
     patrolChoices(scope),
     activityCounts(scope, now),
+    standaloneDocumentRows("activity", scope),
+    canManage ? troopChoices(scope) : Promise.resolve([]),
   ]);
 
   const calendarView = query.view === "calendar";
@@ -91,6 +97,7 @@ export default async function ActivitiesPage({
             {counts.upcomingByStatus.completed > 0 && (
               <Badge tone="neutral">{counts.upcomingByStatus.completed} completed</Badge>
             )}
+            {canManage && <AddDocumentButton parentKind="activity" troops={troops} />}
             {canManage && (
               <Link href="/activities/new" className={buttonStyles()}>
                 <Plus className="size-4" strokeWidth={2.2} aria-hidden />
@@ -100,6 +107,21 @@ export default async function ActivitiesPage({
           </>
         }
       />
+
+      {/* Documents posted with "Add document", alongside the programme. */}
+      {documents.length > 0 && (
+        <section aria-label="Documents" className="space-y-3">
+          <h2 className="text-[13px] font-semibold text-ink-secondary">
+            Documents
+            <span className="ml-2 font-normal text-ink-muted tabular-nums">{documents.length}</span>
+          </h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {documents.map((row) => (
+              <DocumentCard key={row.id} row={row} canManage={canManage} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <ActivityFilters
         query={query}

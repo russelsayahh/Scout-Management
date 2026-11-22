@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, Clock, MapPin } from "lucide-react";
 
+import { AttachmentsCard } from "@/components/attachments/attachments-card";
 import { CampActions } from "@/components/camps/camp-actions";
 import { CampDashboard } from "@/components/camps/camp-dashboard";
 import { CampLeaders } from "@/components/camps/camp-leaders";
@@ -216,6 +217,8 @@ export default async function CampDetailPage({ params, searchParams }: PageProps
               )}
             </CardContent>
           </Card>
+
+          <AttachmentsCard parentKind="camp" parentId={camp.id} canManage={canManage} />
 
           <ParticipantList
             campId={camp.id}

@@ -35,11 +35,14 @@ export function CampGrid({
   camps,
   canManage,
   now,
+  children,
 }: {
   camps: CampSummary[];
   canManage: boolean;
   /** One reference instant, so no two cards disagree about the deadline. */
   now: Date;
+  /** Extra cards placed after the camps in the same grid. */
+  children?: React.ReactNode;
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -144,6 +147,7 @@ export function CampGrid({
           </Card>
         );
       })}
+      {children}
     </div>
   );
 }
